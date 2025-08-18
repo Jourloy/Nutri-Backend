@@ -1,0 +1,13 @@
+version: "3.8"
+
+name: nutri-backend
+services:
+    server:
+        container_name: nutri-backend
+        build:
+            context: .
+        env_file:
+            - .env
+        ports:
+            - "80:3001"
+            - "443:3001"
