@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     telegram_linked_at TIMESTAMP,
     telegram_notifications BOOLEAN DEFAULT FALSE,
     token_version BIGINT DEFAULT 1,
+    view_updates BIGINT DEFAULT 0,
+    view_tutorial BIGINT DEFAULT 0,
     logined_at TIMESTAMP NOT NULL DEFAULT NOW(),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),

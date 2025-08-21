@@ -15,6 +15,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/fit"
 	"github.com/jourloy/nutri-backend/internal/middlewares"
 	"github.com/jourloy/nutri-backend/internal/product"
+	"github.com/jourloy/nutri-backend/internal/template"
 	"github.com/jourloy/nutri-backend/internal/user"
 )
 
@@ -51,6 +52,7 @@ func Start() error {
 	auth.NewController().RegisterRoutes(r)
 	fit.NewController().RegisterRoutes(r)
 	product.NewController().RegisterRoutes(r)
+	template.NewController().RegisterRoutes(r)
 	logger.Debug("Handlers initialized", "latency", time.Since(tempTime))
 
 	// Start server

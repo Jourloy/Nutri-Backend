@@ -8,6 +8,7 @@ type Service interface {
 	CreateUser(user *UserCreate) (*User, error)
 	GetUser(id string) (*User, error)
 	GetUserByUsername(username string) (*User, error)
+	IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
 	DeleteUser(ctx context.Context, id string) (*User, error)
 }
 
@@ -29,6 +30,10 @@ func (s *service) GetUser(id string) (*User, error) {
 
 func (s *service) GetUserByUsername(username string) (*User, error) {
 	return s.repo.GetUserByUsername(context.Background(), username)
+}
+
+func (s *service) IncreaseViewUpdates(ctx context.Context, uid string) (*User, error) {
+	return s.repo.IncreaseViewUpdates(context.Background(), uid)
 }
 
 func (s *service) DeleteUser(ctx context.Context, id string) (*User, error) {

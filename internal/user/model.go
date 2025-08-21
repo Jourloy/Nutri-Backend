@@ -16,6 +16,8 @@ type User struct {
 	TelegramLinkedAt      *time.Time `json:"-"`
 	TelegramNotifications bool       `json:"-"`
 	TokenVersion          int64      `json:"-"`
+	ViewUpdates           int64      `json:"viewUpdates"`
+	ViewTutorial          int64      `json:"viewTutorial"`
 	LoginedAt             *time.Time `json:"-"`
 	CreatedAt             time.Time  `json:"-"`
 	UpdatedAt             time.Time  `json:"-"`

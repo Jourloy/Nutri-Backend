@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -32,6 +33,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/login", c.Login)
 		r.Post("/refresh", c.Refresh)
 		r.Post("/me", c.Me)
+		r.Post("/view/updates", c.IncreaseViewUpdates)
 		r.Delete("/me", c.DeleteMe)
 	})
 
@@ -40,6 +42,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   POST /login")
 	logger.Info("║   POST /refresh")
 	logger.Info("║   POST /me")
+	logger.Info("║   POST /view/updates")
 	logger.Info("║ DELETE /me")
 	logger.Info("╚═════")
 }
@@ -121,6 +124,24 @@ func (c *Controller) Refresh(w http.ResponseWriter, r *http.Request) {
 	c.setAuthCookies(w, resp.AccessToken, resp.RefreshToken)
 
 	// можно ничего не возвращать, но удобно вернуть пользователя и новые токены
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (c *Controller) IncreaseViewUpdates(w http.ResponseWriter, r *http.Request) {
+	u, ok := UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	resp, err := c.service.IncreaseViewUpdates(context.Background(), u.Id)
+	if err != nil {
+		logger.Warn("Increase view update failed", "err", err)
+		http.Error(w, "increase view update failed", http.StatusUnauthorized)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
 }

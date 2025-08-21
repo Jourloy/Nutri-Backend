@@ -13,6 +13,7 @@ type Repository interface {
 	CreateFitProfile(ctx context.Context, fc FitProfileCreate) (*FitProfile, error)
 	GetFitProfileByUser(ctx context.Context, uid string) (*FitProfile, error)
 	GetFitProfileById(ctx context.Context, id string) (*FitProfile, error)
+	UpdateFitProfile(ctx context.Context, fu FitProfileCreate, uid string, fid string) (*FitProfile, error)
 }
 
 type repository struct {
@@ -43,6 +44,30 @@ func (r *repository) CreateFitProfile(ctx context.Context, fc FitProfileCreate) 
 	) RETURNING *`
 
 	err := r.db.QueryRowContext(ctx, query, fc.Age, fc.Gender, fc.Height, fc.Weight, fc.ActivityLevel, fc.Goal, fc.Calories, fc.Protein, fc.Fat, fc.Carbs, fc.UserId).Scan(&f.Id, &f.Age, &f.Gender, &f.Height, &f.Weight, &f.ActivityLevel, &f.Goal, &f.Calories, &f.Protein, &f.Fat, &f.Carbs, &f.UserId, &f.CreatedAt, &f.UpdatedAt, &f.DeletedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &f, nil
+}
+
+func (r *repository) UpdateFitProfile(ctx context.Context, fu FitProfileCreate, uid string, fid string) (*FitProfile, error) {
+	var f FitProfile
+	query := `UPDATE fit_profiles 
+	SET age = $1, 
+	gender = $2,
+	height = $3,
+	weight = $4,
+	activity_level = $5,
+	goal = $6,
+	calories = $7,
+	protein = $8,
+	fat = $9,
+	carbs = $10
+	WHERE id = $11 AND user_id = $12
+	RETURNING *`
+
+	err := r.db.QueryRowContext(ctx, query, fu.Age, fu.Gender, fu.Height, fu.Weight, fu.ActivityLevel, fu.Goal, fu.Calories, fu.Protein, fu.Fat, fu.Carbs, fid, uid).Scan(&f.Id, &f.Age, &f.Gender, &f.Height, &f.Weight, &f.ActivityLevel, &f.Goal, &f.Calories, &f.Protein, &f.Fat, &f.Carbs, &f.UserId, &f.CreatedAt, &f.UpdatedAt, &f.DeletedAt)
 	if err != nil {
 		return nil, err
 	}

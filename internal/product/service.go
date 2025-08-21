@@ -10,6 +10,7 @@ type Service interface {
 	CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error)
 	GetAll(ctx context.Context, uid string) ([]Product, error)
 	GetAllByToday(ctx context.Context, uid string) ([]Product, error)
+	GetLikeName(ctx context.Context, name string, uid string) ([]Product, error)
 }
 
 type service struct {
@@ -47,4 +48,13 @@ func (s *service) GetAllByToday(ctx context.Context, uid string) ([]Product, err
 	}
 
 	return s.repo.GetAllByToday(context.Background(), f.Id, uid)
+}
+
+func (s *service) GetLikeName(ctx context.Context, name string, uid string) ([]Product, error) {
+	f, err := s.fitService.GetFitProfileByUser(uid)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetLikeName(context.Background(), name, f.Id, uid)
 }

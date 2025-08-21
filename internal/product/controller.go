@@ -34,12 +34,14 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/", c.Create)
 		r.Get("/all", c.GetAll)
 		r.Get("/today", c.GetAllByToday)
+		r.Get("/search", c.Search)
 	})
 
 	logger.Info("╔═════ Product")
 	logger.Info("║   POST /")
 	logger.Info("║    GET /all")
 	logger.Info("║    GET /today")
+	logger.Info("║    GET /search?name=")
 	logger.Info("╚═════")
 }
 
@@ -97,6 +99,30 @@ func (c *Controller) GetAllByToday(w http.ResponseWriter, r *http.Request) {
 	resp, err := c.service.GetAllByToday(context.Background(), u.Id)
 	if err != nil {
 		logger.Error("Error get all by today", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (c *Controller) Search(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var name *string
+	if r.URL.Query().Get("name") != "" {
+		v := r.URL.Query().Get("name")
+		name = &v
+	}
+
+	resp, err := c.service.GetLikeName(context.Background(), *name, u.Id)
+	if err != nil {
+		logger.Error("Error search by name", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

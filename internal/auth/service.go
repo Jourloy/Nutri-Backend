@@ -37,6 +37,7 @@ type Service interface {
 	Register(body RegisterData) (*LoginResponse, error)
 	Login(body LoginData) (*LoginResponse, error)
 	Refresh(refreshToken string) (*LoginResponse, error)
+	IncreaseViewUpdates(ctx context.Context, uid string) (*user.User, error)
 	Delete(id string) error
 }
 
@@ -214,6 +215,10 @@ func (s *service) Refresh(refreshToken string) (*LoginResponse, error) {
 	}
 
 	return &LoginResponse{User: u, AccessToken: access, RefreshToken: newRefresh}, nil
+}
+
+func (s *service) IncreaseViewUpdates(ctx context.Context, uid string) (*user.User, error) {
+	return s.userService.IncreaseViewUpdates(context.Background(), uid)
 }
 
 func (s *service) Delete(id string) error {

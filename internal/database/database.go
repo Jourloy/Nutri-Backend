@@ -51,6 +51,8 @@ func Migrate(db *sqlx.DB) {
 		logger.Fatal("Cannot read migrations directory", "error", err)
 	}
 
+	count := 0
+
 	for _, file := range files {
 		if !file.IsDir() {
 			content, err := os.ReadFile("migrations/" + file.Name())
@@ -80,8 +82,28 @@ func Migrate(db *sqlx.DB) {
 			if err != nil {
 				logger.Fatal("Cannot insert migration", "file", file.Name(), "error", err)
 			}
+			count++
 		}
 	}
 
-	logger.Info("Migrations executed successfully")
+	if count == 0 {
+		logger.Info("Migrations not found")
+	} else {
+		logger.Infof("%d migrations executed successfully", count)
+	}
+
+	f, err := os.Open("./assets/products.csv")
+	if err != nil {
+		logger.Error("Cannot open products csv")
+		panic("cannot open products csv")
+	}
+	defer f.Close()
+
+	// repo := &CSVRepository{DB: db}
+	// stats, err := repo.ImportTemplatesFromCSV(context.Background(), f)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// logger.Infof("Всего: %d, вставлено: %d, пропущено: %d, ошибок: %d\n",
+	// 	stats.Total, stats.Inserted, stats.Skipped, stats.Errors)
 }

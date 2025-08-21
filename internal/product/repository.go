@@ -13,6 +13,7 @@ type Repository interface {
 	CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error)
 	GetAll(ctx context.Context, fid string, uid string) ([]Product, error)
 	GetAllByToday(ctx context.Context, fid string, uid string) ([]Product, error)
+	GetLikeName(ctx context.Context, name string, fid string, uid string) ([]Product, error)
 }
 
 type repository struct {
@@ -91,4 +92,37 @@ func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string) 
 		ps = append(ps, p)
 	}
 	return ps, nil
+}
+
+func (r *repository) GetLikeName(ctx context.Context, name string, fid string, uid string) ([]Product, error) {
+	pattern := "%" + name + "%"
+	query := `
+	  SELECT *
+	  FROM products
+	  WHERE name ILIKE $1 AND user_id = $2 AND fit_id = $3
+	  ORDER BY name
+	  LIMIT 10`
+	rows, err := r.db.QueryContext(ctx, query, pattern, uid, fid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []Product
+	for rows.Next() {
+		var p Product
+		err := rows.Scan(&p.Id, &p.Name, &p.Amount, &p.Unit, &p.Calories, &p.Protein, &p.Fat, &p.Carbs, &p.UserId, &p.FitId, &p.CreatedAt, &p.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		p.Calories = p.Calories / float64(p.Amount/100)
+		p.Protein = p.Protein / float64(p.Amount/100)
+		p.Fat = p.Fat / float64(p.Amount/100)
+		p.Carbs = p.Carbs / float64(p.Amount/100)
+
+		res = append(res, p)
+	}
+
+	return res, rows.Err()
 }

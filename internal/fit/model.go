@@ -10,10 +10,10 @@ type FitProfile struct {
 	Weight        int64      `json:"weight"`
 	ActivityLevel float64    `json:"activityLevel"`
 	Goal          string     `json:"goal"`
-	Calories      int64      `json:"calories"`
-	Protein       int64      `json:"protein"`
-	Fat           int64      `json:"fat"`
-	Carbs         int64      `json:"carbs"`
+	Calories      float64    `json:"calories"`
+	Protein       float64    `json:"protein"`
+	Fat           float64    `json:"fat"`
+	Carbs         float64    `json:"carbs"`
 	UserId        string     `json:"-"`
 	CreatedAt     time.Time  `json:"-"`
 	UpdatedAt     time.Time  `json:"-"`
@@ -27,9 +27,9 @@ type FitProfileCreate struct {
 	Weight        int64   `json:"weight"`
 	ActivityLevel float64 `json:"activityLevel"`
 	Goal          string  `json:"goal"`
-	Calories      int64   `json:"calories"`
-	Protein       int64   `json:"protein"`
-	Fat           int64   `json:"fat"`
-	Carbs         int64   `json:"carbs"`
+	Calories      float64 `json:"calories"`
+	Protein       float64 `json:"protein"`
+	Fat           float64 `json:"fat"`
+	Carbs         float64 `json:"carbs"`
 	UserId        string
 }
