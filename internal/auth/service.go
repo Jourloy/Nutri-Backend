@@ -214,6 +214,11 @@ func (s *service) Refresh(refreshToken string) (*LoginResponse, error) {
 		return nil, err
 	}
 
+	err = s.userService.UpdateLogin(context.Background(), u.Id)
+	if err != nil {
+		return nil, err
+	}
+
 	return &LoginResponse{User: u, AccessToken: access, RefreshToken: newRefresh}, nil
 }
 
@@ -222,7 +227,6 @@ func (s *service) IncreaseViewUpdates(ctx context.Context, uid string) (*user.Us
 }
 
 func (s *service) Delete(id string) error {
-	logger.Debug("Delete in auth service")
 	_, err := s.userService.DeleteUser(context.Background(), id)
 	return err
 }

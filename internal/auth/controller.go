@@ -48,12 +48,12 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 }
 
 func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh string) {
-	secure := false // в dev на http можно временно false
+	secure := true
 	http.SetCookie(w, &http.Cookie{
 		Name:     "jwt",
 		Value:    access,
 		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		HttpOnly: true,
 		Secure:   secure,
 	})
@@ -61,7 +61,7 @@ func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh strin
 		Name:     "refresh_token",
 		Value:    refresh,
 		Path:     "/auth/refresh",
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		HttpOnly: true,
 		Secure:   secure,
 	})
