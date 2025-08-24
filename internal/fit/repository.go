@@ -24,80 +24,128 @@ func NewRepository() Repository {
 	return &repository{db: database.Database}
 }
 
+// единый список колонок — без SELECT *
+const fitColumns = `
+	id, age, gender, height, weight, activity_level, goal,
+	calories, protein, fat, carbs, water_limit,
+	user_id, created_at, updated_at, deleted_at
+`
+
 func (r *repository) CreateFitProfile(ctx context.Context, fc FitProfileCreate) (*FitProfile, error) {
-
-	var f FitProfile
-	query := `INSERT INTO fit_profiles (
-	age, 
-	gender,
-	height,
-	weight,
-	activity_level,
-	goal,
-	calories,
-	protein,
-	fat,
-	carbs,
-	user_id
+	const q = `
+	INSERT INTO fit_profiles (
+		age, gender, height, weight, activity_level, goal,
+		calories, protein, fat, carbs, water_limit, user_id
 	) VALUES (
-	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-	) RETURNING *`
+		:age, :gender, :height, :weight, :activity_level, :goal,
+		:calories, :protein, :fat, :carbs, :water_limit, :user_id
+	)
+	RETURNING ` + fitColumns + `;`
 
-	err := r.db.QueryRowContext(ctx, query, fc.Age, fc.Gender, fc.Height, fc.Weight, fc.ActivityLevel, fc.Goal, fc.Calories, fc.Protein, fc.Fat, fc.Carbs, fc.UserId).Scan(&f.Id, &f.Age, &f.Gender, &f.Height, &f.Weight, &f.ActivityLevel, &f.Goal, &f.Calories, &f.Protein, &f.Fat, &f.Carbs, &f.UserId, &f.CreatedAt, &f.UpdatedAt, &f.DeletedAt)
+	args := map[string]any{
+		"age":            fc.Age,
+		"gender":         fc.Gender,
+		"height":         fc.Height,
+		"weight":         fc.Weight,
+		"activity_level": fc.ActivityLevel,
+		"goal":           fc.Goal,
+		"calories":       fc.Calories,
+		"protein":        fc.Protein,
+		"fat":            fc.Fat,
+		"carbs":          fc.Carbs,
+		"water_limit":    fc.WaterLimit,
+		"user_id":        fc.UserId,
+	}
+
+	rows, err := r.db.NamedQueryContext(ctx, q, args)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	return &f, nil
+	if rows.Next() {
+		var f FitProfile
+		if err := rows.StructScan(&f); err != nil {
+			return nil, err
+		}
+		return &f, nil
+	}
+	return nil, nil
 }
 
-func (r *repository) UpdateFitProfile(ctx context.Context, fu FitProfileCreate, uid string, fid string) (*FitProfile, error) {
-	var f FitProfile
-	query := `UPDATE fit_profiles 
-	SET age = $1, 
-	gender = $2,
-	height = $3,
-	weight = $4,
-	activity_level = $5,
-	goal = $6,
-	calories = $7,
-	protein = $8,
-	fat = $9,
-	carbs = $10
-	WHERE id = $11 AND user_id = $12
-	RETURNING *`
+func (r *repository) UpdateFitProfile(ctx context.Context, fu FitProfileCreate, uid, fid string) (*FitProfile, error) {
+	const q = `
+	UPDATE fit_profiles
+	SET
+		age = :age,
+		gender = :gender,
+		height = :height,
+		weight = :weight,
+		activity_level = :activity_level,
+		goal = :goal,
+		calories = :calories,
+		protein = :protein,
+		fat = :fat,
+		carbs = :carbs,
+		water_limit = :water_limit,
+		updated_at = now()
+	WHERE id = :id AND user_id = :user_id
+	RETURNING ` + fitColumns + `;`
 
-	err := r.db.QueryRowContext(ctx, query, fu.Age, fu.Gender, fu.Height, fu.Weight, fu.ActivityLevel, fu.Goal, fu.Calories, fu.Protein, fu.Fat, fu.Carbs, fid, uid).Scan(&f.Id, &f.Age, &f.Gender, &f.Height, &f.Weight, &f.ActivityLevel, &f.Goal, &f.Calories, &f.Protein, &f.Fat, &f.Carbs, &f.UserId, &f.CreatedAt, &f.UpdatedAt, &f.DeletedAt)
+	args := map[string]any{
+		"id":             fid,
+		"user_id":        uid,
+		"age":            fu.Age,
+		"gender":         fu.Gender,
+		"height":         fu.Height,
+		"weight":         fu.Weight,
+		"activity_level": fu.ActivityLevel,
+		"goal":           fu.Goal,
+		"calories":       fu.Calories,
+		"protein":        fu.Protein,
+		"fat":            fu.Fat,
+		"carbs":          fu.Carbs,
+		"water_limit":    fu.WaterLimit,
+	}
+
+	rows, err := r.db.NamedQueryContext(ctx, q, args)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	return &f, nil
+	if rows.Next() {
+		var f FitProfile
+		if err := rows.StructScan(&f); err != nil {
+			return nil, err
+		}
+		return &f, nil
+	}
+	// not found
+	return nil, nil
 }
 
 func (r *repository) GetFitProfileByUser(ctx context.Context, uid string) (*FitProfile, error) {
-	query := "SELECT * FROM fit_profiles WHERE user_id = $1"
-	row := r.db.QueryRowContext(ctx, query, uid)
+	const q = `SELECT ` + fitColumns + ` FROM fit_profiles WHERE user_id = $1 LIMIT 1;`
 
 	var f FitProfile
-	err := row.Scan(&f.Id, &f.Age, &f.Gender, &f.Height, &f.Weight, &f.ActivityLevel, &f.Goal, &f.Calories, &f.Protein, &f.Fat, &f.Carbs, &f.UserId, &f.CreatedAt, &f.UpdatedAt, &f.DeletedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	} else if err != nil {
+	if err := r.db.GetContext(ctx, &f, q, uid); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &f, nil
 }
 
 func (r *repository) GetFitProfileById(ctx context.Context, id string) (*FitProfile, error) {
-	query := "SELECT * FROM fit_profiles WHERE id = $1"
-	row := r.db.QueryRowContext(ctx, query, id)
+	const q = `SELECT ` + fitColumns + ` FROM fit_profiles WHERE id = $1 LIMIT 1;`
 
 	var f FitProfile
-	err := row.Scan(&f.Id, &f.Age, &f.Gender, &f.Height, &f.Weight, &f.ActivityLevel, &f.Goal, &f.Calories, &f.Protein, &f.Fat, &f.Carbs, &f.UserId, &f.CreatedAt, &f.UpdatedAt, &f.DeletedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	} else if err != nil {
+	if err := r.db.GetContext(ctx, &f, q, id); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &f, nil

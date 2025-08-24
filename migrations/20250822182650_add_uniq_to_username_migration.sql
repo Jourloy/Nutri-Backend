@@ -1,6 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS citext;
 
--- меняем тип на citext (автоматически case-insensitive сравнение/уникальность)
 ALTER TABLE users
 ALTER COLUMN username TYPE citext;
 

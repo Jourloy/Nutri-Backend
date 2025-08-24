@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jourloy/nutri-backend/internal/fit"
 )
@@ -30,6 +31,14 @@ func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) (*Product
 		return nil, err
 	}
 	pc.FitId = f.Id
+
+	count, err := s.repo.GetCountByToday(ctx, f.Id, pc.UserId)
+	if err != nil {
+		return nil, err
+	}
+	if count >= 20 {
+		return nil, errors.New("you have reached the maximum number of products for today")
+	}
 
 	return s.repo.CreateProduct(ctx, pc)
 }

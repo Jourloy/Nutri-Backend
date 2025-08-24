@@ -1,0 +1,5 @@
+ALTER TABLE fit_profiles
+ADD COLUMN water_limit INT;
+
+ALTER TABLE products
+ADD COLUMN is_water BOOLEAN DEFAULT FALSE;

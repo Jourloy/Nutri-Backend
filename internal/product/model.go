@@ -15,6 +15,7 @@ type Product struct {
 	BasicProtein  float64   `json:"basicProtein" db:"basic_protein"`
 	BasicFat      float64   `json:"basicFat" db:"basic_fat"`
 	BasicCarbs    float64   `json:"basicCarbs" db:"basic_carbs"`
+	IsWater       bool      `json:"isWater" db:"is_water"`
 	UserId        string    `json:"-" db:"user_id"`
 	FitId         string    `json:"-" db:"fit_id"`
 	CreatedAt     time.Time `json:"-" db:"created_at"`
@@ -33,6 +34,7 @@ type ProductCreate struct {
 	BasicProtein  float64 `json:"basicProtein" db:"basic_protein"`
 	BasicFat      float64 `json:"basicFat" db:"basic_fat"`
 	BasicCarbs    float64 `json:"basicCarbs" db:"basic_carbs"`
+	IsWater       bool    `json:"isWater" db:"is_water"`
 	UserId        string  `json:"-" db:"user_id"`
 	FitId         string  `json:"-" db:"fit_id"`
 }

@@ -14,6 +14,8 @@ type Repository interface {
 	CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error)
 	GetAll(ctx context.Context, fid string, uid string) ([]Product, error)
 	GetAllByToday(ctx context.Context, fid string, uid string) ([]Product, error)
+	GetCount(ctx context.Context, fid string, uid string) (int, error)
+	GetCountByToday(ctx context.Context, fid string, uid string) (int, error)
 	GetLikeName(ctx context.Context, name string, fid string, uid string) ([]Product, error)
 	UpdateProduct(ctx context.Context, pu Product, fid string, uid string) (*Product, error)
 	DeleteProduct(ctx context.Context, pid int64, fid string, uid string) error
@@ -32,16 +34,16 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) (*Prod
 	INSERT INTO products (
 		name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		user_id, fit_id
+		is_water, user_id, fit_id
 	) VALUES (
 		:name, :amount, :unit, :calories, :protein, :fat, :carbs,
 		:basic_calories, :basic_protein, :basic_fat, :basic_carbs,
-		:user_id, :fit_id
+		:is_water, :user_id, :fit_id
 	)
 	RETURNING
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		user_id, fit_id, created_at, updated_at;`
+		is_water, user_id, fit_id, created_at, updated_at;`
 
 	rows, err := r.db.NamedQueryContext(ctx, q, pc)
 	if err != nil {
@@ -64,7 +66,7 @@ func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, er
 	SELECT
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		user_id, fit_id, created_at, updated_at
+		is_water, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2
 	ORDER BY created_at DESC`
@@ -73,7 +75,7 @@ func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, er
 	if err := r.db.SelectContext(ctx, &ps, q, uid, fid); err != nil {
 		return nil, err
 	}
-	// Если строк нет, ps будет пустым слайсом и err == nil — это ок.
+
 	return ps, nil
 }
 
@@ -82,7 +84,7 @@ func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string) 
 	SELECT
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		user_id, fit_id, created_at, updated_at
+		is_water, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2 AND created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'
 	ORDER BY created_at DESC`
@@ -91,8 +93,34 @@ func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string) 
 	if err := r.db.SelectContext(ctx, &ps, q, uid, fid); err != nil {
 		return nil, err
 	}
-	// Если строк нет, ps будет пустым слайсом и err == nil — это ок.
+
 	return ps, nil
+}
+
+func (r *repository) GetCount(ctx context.Context, fid, uid string) (int, error) {
+	const q = `
+	SELECT COUNT(*) FROM products
+	WHERE user_id = $1 AND fit_id = $2`
+
+	var count int
+	if err := r.db.GetContext(ctx, &count, q, uid, fid); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *repository) GetCountByToday(ctx context.Context, fid, uid string) (int, error) {
+	const q = `
+	SELECT COUNT(*) FROM products
+	WHERE user_id = $1 AND fit_id = $2 AND created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'`
+
+	var count int
+	if err := r.db.GetContext(ctx, &count, q, uid, fid); err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func (r *repository) GetLikeName(ctx context.Context, name, fid, uid string) ([]Product, error) {
@@ -101,7 +129,7 @@ func (r *repository) GetLikeName(ctx context.Context, name, fid, uid string) ([]
 	SELECT DISTINCT ON (p.name)
 		p.id, p.name, p.amount, p.unit, p.calories, p.protein, p.fat, p.carbs,
 		p.basic_calories, p.basic_protein, p.basic_fat, p.basic_carbs,
-		p.user_id, p.fit_id, p.created_at, p.updated_at
+		p.is_water, p.user_id, p.fit_id, p.created_at, p.updated_at
 	FROM products p
 	WHERE p.name ILIKE $1 AND p.user_id = $2 AND p.fit_id = $3 AND basic_calories != 0
 	ORDER BY p.name, p.created_at DESC
@@ -130,7 +158,7 @@ func (r *repository) UpdateProduct(ctx context.Context, pu Product, fid, uid str
 	RETURNING
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		user_id, fit_id, created_at, updated_at;`
+		is_water, user_id, fit_id, created_at, updated_at;`
 
 	args := map[string]any{
 		"id": pu.Id, "fit_id": fid, "user_id": uid,
