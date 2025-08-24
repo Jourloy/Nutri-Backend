@@ -32,7 +32,7 @@ const userColumns = `
 	is_accept_terms, is_accept_privacy, is_18,
 	telegram_chat_id, telegram_linked_at, telegram_notifications,
 	token_version, view_updates, view_tutorial,
-	logined_at, created_at, updated_at, deleted_at
+	is_admin, logined_at, created_at, updated_at, deleted_at
 `
 
 func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*User, error) {

@@ -18,6 +18,7 @@ type User struct {
 	TokenVersion          int64      `json:"-" db:"token_version"`
 	ViewUpdates           int64      `json:"viewUpdates" db:"view_updates"`
 	ViewTutorial          int64      `json:"viewTutorial" db:"view_tutorial"`
+	IsAdmin               bool       `json:"-" db:"is_admin"`
 	LoginedAt             *time.Time `json:"-" db:"logined_at"`
 	CreatedAt             time.Time  `json:"-" db:"created_at"`
 	UpdatedAt             time.Time  `json:"-" db:"updated_at"`
