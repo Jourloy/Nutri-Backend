@@ -45,7 +45,7 @@ func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*U
 	args := map[string]any{
 		"username":      userCreate.Username,
 		"password_hash": userCreate.PasswordHash,
-		"view_updates":  2,
+		"view_updates":  3,
 	}
 
 	// Сначала пытаемся вставить и сразу вернуть строку
