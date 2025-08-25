@@ -12,8 +12,10 @@ type JwtData struct {
 }
 
 type conf struct {
-	DatabaseDSN string // DSN link for connect with database
-	JWTSecret   string
+	DatabaseDSN           string // DSN link for connect with database
+	JWTSecret             string
+	TbankTerminalKey      string
+	TbankTerminalPassword string
 }
 
 type contextKeys struct {
@@ -48,13 +50,29 @@ func ParseENV() error {
 	if env, exist := os.LookupEnv("DATABASE_DSN"); exist {
 		Config.DatabaseDSN = env
 	} else {
+		logger.Error("cannot find env DATABASE_DSN")
 		return errors.New("cannot find env DATABASE_DSN")
 	}
 
 	if env, exist := os.LookupEnv("JWT_SECRET"); exist {
 		Config.JWTSecret = env
 	} else {
+		logger.Error("cannot find env JWT_SECRET")
 		return errors.New("cannot find env JWT_SECRET")
+	}
+
+	if env, exist := os.LookupEnv("TBANK_TERMINAL_KEY"); exist {
+		Config.TbankTerminalKey = env
+	} else {
+		logger.Error("cannot find env TBANK_TERMINAL_KEY")
+		return errors.New("cannot find env TBANK_TERMINAL_KEY")
+	}
+
+	if env, exist := os.LookupEnv("TBANK_TERMINAL_PASSWORD"); exist {
+		Config.TbankTerminalPassword = env
+	} else {
+		logger.Error("cannot find env TBANK_TERMINAL_PASSWORD")
+		return errors.New("cannot find env TBANK_TERMINAL_PASSWORD")
 	}
 
 	return nil
