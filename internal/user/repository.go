@@ -106,7 +106,7 @@ func (r *repository) IncreaseViewUpdates(ctx context.Context, uid string) (*User
 	// Увеличиваем счётчик и возвращаем обновлённую строку
 	const q = `
 	UPDATE users
-	SET view_updates = view_updates + 1,
+	SET view_updates = 3,
 		updated_at   = now()
 	WHERE id = $1
 	RETURNING ` + userColumns + `;`
