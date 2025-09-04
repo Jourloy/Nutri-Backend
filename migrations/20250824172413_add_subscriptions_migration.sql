@@ -1,7 +1,3 @@
--- Add admin
-ALTER TABLE users
-ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE;
-
 -- plans
 CREATE TABLE
 	IF NOT EXISTS plans (

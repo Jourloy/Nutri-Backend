@@ -9,9 +9,12 @@ import (
 )
 
 type Repository interface {
-	Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error)
-	Update(ctx context.Context, s Subscription) (*Subscription, error)
-	Delete(ctx context.Context, id int64, uid string) error
+    Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error)
+    Update(ctx context.Context, s Subscription) (*Subscription, error)
+    Delete(ctx context.Context, id int64, uid string) error
+    // Additional getters for orders/renewals integration
+    GetByUser(ctx context.Context, userId string) (*Subscription, error)
+    GetAll(ctx context.Context) ([]Subscription, error)
 }
 
 type repository struct {
@@ -100,4 +103,36 @@ func (r *repository) Delete(ctx context.Context, id int64, uid string) error {
 		return err
 	}
 	return nil
+}
+
+func (r *repository) GetByUser(ctx context.Context, userId string) (*Subscription, error) {
+    const q = `
+        SELECT id, user_id, plan_id, status, period_start, period_end,
+               cancel_at, canceled_at, trial_end, amount_minor, currency,
+               billing_period, external_subscription_id, external_customer_id,
+               created_at, updated_at
+        FROM subscriptions
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1;`
+    var s Subscription
+    if err := r.db.GetContext(ctx, &s, q, userId); err != nil {
+        return nil, err
+    }
+    return &s, nil
+}
+
+func (r *repository) GetAll(ctx context.Context) ([]Subscription, error) {
+    const q = `
+        SELECT id, user_id, plan_id, status, period_start, period_end,
+               cancel_at, canceled_at, trial_end, amount_minor, currency,
+               billing_period, external_subscription_id, external_customer_id,
+               created_at, updated_at
+        FROM subscriptions
+        ORDER BY created_at DESC`
+    var res []Subscription
+    if err := r.db.SelectContext(ctx, &res, q); err != nil {
+        return nil, err
+    }
+    return res, nil
 }

@@ -92,12 +92,12 @@ func Migrate(db *sqlx.DB) {
 		logger.Infof("%d migrations executed successfully", count)
 	}
 
-	f, err := os.Open("./assets/products.csv")
-	if err != nil {
-		logger.Error("Cannot open products csv")
-		panic("cannot open products csv")
-	}
-	defer f.Close()
+	// f, err := os.Open("./assets/products.csv")
+	// if err != nil {
+	// 	logger.Error("Cannot open products csv")
+	// 	panic("cannot open products csv")
+	// }
+	// defer f.Close()
 
 	// repo := &CSVRepository{DB: db}
 	// stats, err := repo.ImportTemplatesFromCSV(context.Background(), f)

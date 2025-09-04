@@ -16,9 +16,11 @@ import (
 	"github.com/jourloy/nutri-backend/internal/fit"
 	"github.com/jourloy/nutri-backend/internal/middlewares"
 	"github.com/jourloy/nutri-backend/internal/plan"
+	"github.com/jourloy/nutri-backend/internal/order"
 	"github.com/jourloy/nutri-backend/internal/product"
 	"github.com/jourloy/nutri-backend/internal/subscription"
 	"github.com/jourloy/nutri-backend/internal/template"
+	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/user"
 )
 
@@ -56,9 +58,15 @@ func Start() error {
 	fit.NewController().RegisterRoutes(r)
 	product.NewController().RegisterRoutes(r)
 	plan.NewController().RegisterRoutes(r)
+	order.NewController().RegisterRoutes(r)
 	feature.NewController().RegisterRoutes(r)
 	subscription.NewController().RegisterRoutes(r)
 	template.NewController().RegisterRoutes(r)
+	telegram.NewController().RegisterRoutes(r)
+
+	// Background workers
+	order.StartWorker()
+
 	logger.Debug("Handlers initialized", "latency", time.Since(tempTime))
 
 	// Start server

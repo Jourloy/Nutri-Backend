@@ -29,10 +29,9 @@ func NewRepository() Repository {
 // единый список колонок — не используем SELECT *
 const userColumns = `
 	id, username, password_hash,
-	is_accept_terms, is_accept_privacy, is_18,
-	telegram_chat_id, telegram_linked_at, telegram_notifications,
+	is_accept_terms, is_accept_privacy, is_18, is_admin, 
 	token_version, view_updates, view_tutorial,
-	is_admin, logined_at, created_at, updated_at, deleted_at
+	logined_at, created_at, updated_at, deleted_at
 `
 
 func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*User, error) {

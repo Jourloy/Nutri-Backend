@@ -3,9 +3,10 @@ package subscription
 import "context"
 
 type Service interface {
-	Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error)
-	Update(ctx context.Context, s Subscription) (*Subscription, error)
-	Delete(ctx context.Context, id int64, uid string) error
+    Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error)
+    Update(ctx context.Context, s Subscription) (*Subscription, error)
+    Delete(ctx context.Context, id int64, uid string) error
+    GetByUser(ctx context.Context, uid string) (*Subscription, error)
 }
 
 type service struct {
@@ -25,5 +26,9 @@ func (s *service) Update(ctx context.Context, sub Subscription) (*Subscription, 
 }
 
 func (s *service) Delete(ctx context.Context, id int64, uid string) error {
-	return s.repo.Delete(ctx, id, uid)
+    return s.repo.Delete(ctx, id, uid)
+}
+
+func (s *service) GetByUser(ctx context.Context, uid string) (*Subscription, error) {
+    return s.repo.GetByUser(ctx, uid)
 }

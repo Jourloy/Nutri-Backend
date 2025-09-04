@@ -16,6 +16,8 @@ type conf struct {
 	JWTSecret             string
 	TbankTerminalKey      string
 	TbankTerminalPassword string
+	TelegramToken         string // Optional: used to proxy Telegram avatars
+	MyURL                 string
 }
 
 type contextKeys struct {
@@ -73,6 +75,20 @@ func ParseENV() error {
 	} else {
 		logger.Error("cannot find env TBANK_TERMINAL_PASSWORD")
 		return errors.New("cannot find env TBANK_TERMINAL_PASSWORD")
+	}
+
+	if env, exist := os.LookupEnv("MY_URL"); exist {
+		Config.MyURL = env
+	} else {
+		logger.Error("cannot find env MY_URL")
+		return errors.New("cannot find env MY_URL")
+	}
+
+	if env, exist := os.LookupEnv("TELEGRAM_TOKEN"); exist {
+		Config.TelegramToken = env
+	} else {
+		logger.Error("cannot find env TELEGRAM_TOKEN")
+		return errors.New("cannot find env TELEGRAM_TOKEN")
 	}
 
 	return nil
