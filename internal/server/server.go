@@ -1,20 +1,22 @@
 package server
 
 import (
-	"net/http"
-	"os"
-	"time"
+    "net/http"
+    "os"
+    "time"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
+    "github.com/go-chi/cors"
 
-	"github.com/jourloy/nutri-backend/internal/auth"
-	"github.com/jourloy/nutri-backend/internal/database"
-	"github.com/jourloy/nutri-backend/internal/feature"
-	"github.com/jourloy/nutri-backend/internal/fit"
-	"github.com/jourloy/nutri-backend/internal/middlewares"
+    "github.com/jourloy/nutri-backend/internal/achievement"
+    "github.com/jourloy/nutri-backend/internal/body"
+    "github.com/jourloy/nutri-backend/internal/auth"
+    "github.com/jourloy/nutri-backend/internal/database"
+    "github.com/jourloy/nutri-backend/internal/feature"
+    "github.com/jourloy/nutri-backend/internal/fit"
+    "github.com/jourloy/nutri-backend/internal/middlewares"
 	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/order"
 	"github.com/jourloy/nutri-backend/internal/product"
@@ -59,13 +61,16 @@ func Start() error {
 	product.NewController().RegisterRoutes(r)
 	plan.NewController().RegisterRoutes(r)
 	order.NewController().RegisterRoutes(r)
-	feature.NewController().RegisterRoutes(r)
-	subscription.NewController().RegisterRoutes(r)
-	template.NewController().RegisterRoutes(r)
-	telegram.NewController().RegisterRoutes(r)
+    feature.NewController().RegisterRoutes(r)
+    subscription.NewController().RegisterRoutes(r)
+    template.NewController().RegisterRoutes(r)
+    telegram.NewController().RegisterRoutes(r)
+    achievement.NewController().RegisterRoutes(r)
+    body.NewController().RegisterRoutes(r)
 
-	// Background workers
-	order.StartWorker()
+    // Background workers
+    order.StartWorker()
+    body.StartWorker()
 
 	logger.Debug("Handlers initialized", "latency", time.Since(tempTime))
 

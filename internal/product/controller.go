@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/jourloy/nutri-backend/internal/achievement"
 	"github.com/jourloy/nutri-backend/internal/auth"
 )
 
@@ -71,6 +72,9 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Re-evaluate achievements asynchronously
+	go func(uid string) { _ , _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
 
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -158,6 +162,8 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go func(uid string) { _ , _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
+
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -189,6 +195,8 @@ func (c *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	go func(uid string) { _ , _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
 
 	w.WriteHeader(http.StatusOK)
 }
