@@ -11,6 +11,7 @@ import (
     "github.com/go-chi/cors"
 
     "github.com/jourloy/nutri-backend/internal/achievement"
+    "github.com/jourloy/nutri-backend/internal/analytics"
     "github.com/jourloy/nutri-backend/internal/body"
     "github.com/jourloy/nutri-backend/internal/auth"
     "github.com/jourloy/nutri-backend/internal/database"
@@ -52,6 +53,7 @@ func Start() error {
 	}))
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
+	r.Use(middlewares.Subscription)
 	r.Use(middleware.Recoverer)
 
 	// Handlers
@@ -66,6 +68,7 @@ func Start() error {
     template.NewController().RegisterRoutes(r)
     telegram.NewController().RegisterRoutes(r)
     achievement.NewController().RegisterRoutes(r)
+    analytics.NewController().RegisterRoutes(r)
     body.NewController().RegisterRoutes(r)
 
     // Background workers
