@@ -17,7 +17,7 @@ import (
 )
 
 type TBankClient interface {
-	Init(amountMinor int64, orderId string, userId, description string, returnURL *string, recursive bool) (paymentURL string, tbOrderId string, err error)
+	Init(amountMinor int64, orderId, userId, description, email string, returnURL *string, recursive bool) (paymentURL string, tbOrderId string, err error)
 	Charge(rebillId string, amountMinor int64, orderId string) error
 }
 
@@ -100,7 +100,7 @@ func signToken(secret string, fields map[string]any) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (c *tbankClient) Init(amountMinor int64, orderId string, userId string, description string, returnURL *string, recursive bool) (string, string, error) {
+func (c *tbankClient) Init(amountMinor int64, orderId, userId, description, email string, returnURL *string, recursive bool) (string, string, error) {
 	amount := amountMinor * 100
 	payload := map[string]any{
 		"TerminalKey":     c.terminalKey,
@@ -117,10 +117,8 @@ func (c *tbankClient) Init(amountMinor int64, orderId string, userId string, des
 		payload["Recurrent"] = "Y"
 	}
 
-	// Precompute token for logging and request
 	tok := signToken(c.secret, payload)
 
-	// Log full request body object that will be sent
 	{
 		logPayload := make(map[string]any, len(payload)+1)
 		for k, v := range payload {
@@ -133,6 +131,12 @@ func (c *tbankClient) Init(amountMinor int64, orderId string, userId string, des
 	}
 
 	payload["Token"] = tok
+	payload["Receipt"] = Receipt{
+		Items:    []Item{{Name: description, Quantity: 1, Price: amount, Amount: amount, Tax: "none"}},
+		Taxation: "usn_income",
+		Email:    email,
+	}
+
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v2/Init", c.baseURL), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

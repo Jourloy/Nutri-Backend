@@ -10,12 +10,13 @@ import (
 )
 
 type Repository interface {
-	CreateUser(ctx context.Context, user *UserCreate) (*User, error)
-	GetUser(ctx context.Context, id string) (*User, error)
-	GetUserByUsername(ctx context.Context, username string) (*User, error)
-	IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
-	UpdateLogin(ctx context.Context, uid string) error
-	DeleteUser(ctx context.Context, id string) (*User, error)
+    CreateUser(ctx context.Context, user *UserCreate) (*User, error)
+    GetUser(ctx context.Context, id string) (*User, error)
+    GetUserByUsername(ctx context.Context, username string) (*User, error)
+    IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
+    UpdateLogin(ctx context.Context, uid string) error
+    DeleteUser(ctx context.Context, id string) (*User, error)
+    UpdateEmail(ctx context.Context, uid string, email string) (*User, error)
 }
 
 type repository struct {
@@ -28,10 +29,11 @@ func NewRepository() Repository {
 
 // единый список колонок — не используем SELECT *
 const userColumns = `
-	id, username, password_hash,
-	is_accept_terms, is_accept_privacy, is_18, is_admin, 
-	token_version, view_updates, view_tutorial,
-	logined_at, created_at, updated_at, deleted_at
+    id, username, password_hash,
+    email,
+    is_accept_terms, is_accept_privacy, is_18, is_admin, 
+    token_version, view_updates, view_tutorial,
+    logined_at, created_at, updated_at, deleted_at
 `
 
 func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*User, error) {
@@ -150,4 +152,22 @@ func (r *repository) DeleteUser(ctx context.Context, id string) (*User, error) {
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (r *repository) UpdateEmail(ctx context.Context, uid string, email string) (*User, error) {
+    const q = `
+        UPDATE users
+        SET email = $2,
+            updated_at = now()
+        WHERE id = $1
+        RETURNING ` + userColumns + `;`
+
+    var u User
+    if err := r.db.GetContext(ctx, &u, q, uid, email); err != nil {
+        if err == sql.ErrNoRows {
+            return nil, nil
+        }
+        return nil, err
+    }
+    return &u, nil
 }

@@ -6,14 +6,15 @@ import (
 
 // User представляет структуру пользователя в системе.
 type User struct {
-	Id              string     `json:"id" db:"id"`
-	Username        string     `json:"username" db:"username"`
-	PasswordHash    string     `json:"-" db:"password_hash"`
-	IsAcceptTerms   bool       `json:"-" db:"is_accept_terms"`
-	IsAcceptPrivacy bool       `json:"-" db:"is_accept_privacy"`
-	Is18            bool       `json:"-" db:"is_18"`
-	IsAdmin         bool       `json:"-" db:"is_admin"`
-	TokenVersion    int64      `json:"-" db:"token_version"`
+    Id              string     `json:"id" db:"id"`
+    Username        string     `json:"username" db:"username"`
+    PasswordHash    string     `json:"-" db:"password_hash"`
+    Email           *string    `json:"email,omitempty" db:"email"`
+    IsAcceptTerms   bool       `json:"-" db:"is_accept_terms"`
+    IsAcceptPrivacy bool       `json:"-" db:"is_accept_privacy"`
+    Is18            bool       `json:"-" db:"is_18"`
+    IsAdmin         bool       `json:"-" db:"is_admin"`
+    TokenVersion    int64      `json:"-" db:"token_version"`
 	ViewUpdates     int64      `json:"viewUpdates" db:"view_updates"`
 	ViewTutorial    int64      `json:"viewTutorial" db:"view_tutorial"`
 	LoginedAt       *time.Time `json:"-" db:"logined_at"`

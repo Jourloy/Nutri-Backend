@@ -10,10 +10,11 @@ import (
 
 	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/subscription"
+	userpkg "github.com/jourloy/nutri-backend/internal/user"
 )
 
 type Service interface {
-	Init(ctx context.Context, userId string, planId int64, returnURL *string) (*InitResponse, error)
+	Init(ctx context.Context, userId string, planId int64, email string, returnURL *string) (*InitResponse, error)
 	HandleTBankWebhook(ctx context.Context, w TBankWebhook) error
 	List(ctx context.Context, userId string, isAdmin bool) ([]Order, error)
 	Delete(ctx context.Context, id int64, userId string, isAdmin bool) error
@@ -25,6 +26,7 @@ type service struct {
 	planRepo plan.Repository
 	subRepo  subscription.Repository
 	tbank    TBankClient
+	userRepo userpkg.Repository
 }
 
 func NewService() Service {
@@ -33,10 +35,15 @@ func NewService() Service {
 		planRepo: plan.NewRepository(),
 		subRepo:  subscription.NewRepository(),
 		tbank:    NewTBankClient(),
+		userRepo: userpkg.NewRepository(),
 	}
 }
 
-func (s *service) Init(ctx context.Context, userId string, planId int64, returnURL *string) (*InitResponse, error) {
+func (s *service) Init(ctx context.Context, userId string, planId int64, email string, returnURL *string) (*InitResponse, error) {
+	// Best-effort: persist email to the user's profile if provided
+	if email != "" {
+		_, _ = s.userRepo.UpdateEmail(ctx, userId, email)
+	}
 	plans, err := s.planRepo.GetAllActive(ctx)
 	if err != nil {
 		return nil, err
@@ -60,7 +67,7 @@ func (s *service) Init(ctx context.Context, userId string, planId int64, returnU
 	}
 
 	localOrderId := strconv.FormatInt(created.Id, 10)
-	paymentURL, tbOrderId, err := s.tbank.Init(pl.AmountMinor, localOrderId, userId, fmt.Sprintf("Plan %s", pl.Code), returnURL, true)
+	paymentURL, tbOrderId, err := s.tbank.Init(pl.AmountMinor, localOrderId, userId, fmt.Sprintf("План %s", pl.Code), email, returnURL, true)
 	if err != nil {
 		msg := err.Error()
 		created.LastError = &msg
