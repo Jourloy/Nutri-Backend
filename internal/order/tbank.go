@@ -3,6 +3,7 @@ package order
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -138,6 +139,8 @@ func (c *tbankClient) Init(amountMinor int64, orderId, userId, description, emai
 	}
 
 	body, _ := json.Marshal(payload)
+
+	c.httpClient.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v2/Init", c.baseURL), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
