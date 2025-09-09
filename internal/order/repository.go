@@ -11,6 +11,7 @@ type Repository interface {
     Create(ctx context.Context, o Order) (*Order, error)
     Update(ctx context.Context, o Order) (*Order, error)
     GetByTbOrderId(ctx context.Context, tbOrderId string) (*Order, error)
+    GetById(ctx context.Context, id int64) (*Order, error)
     GetAll(ctx context.Context, userID string, isAdmin bool) ([]Order, error)
     Delete(ctx context.Context, id int64, userID string, isAdmin bool) error
 }
@@ -49,6 +50,13 @@ func (r *repository) GetByTbOrderId(ctx context.Context, tbOrderId string) (*Ord
     return &o, nil
 }
 
+func (r *repository) GetById(ctx context.Context, id int64) (*Order, error) {
+    const q = `SELECT ` + columns + ` FROM orders WHERE id=$1`
+    var o Order
+    if err := r.db.GetContext(ctx, &o, q, id); err != nil { return nil, err }
+    return &o, nil
+}
+
 func (r *repository) GetAll(ctx context.Context, userID string, isAdmin bool) ([]Order, error) {
     q := `SELECT ` + columns + ` FROM orders`
     args := []any{}
@@ -65,4 +73,3 @@ func (r *repository) Delete(ctx context.Context, id int64, userID string, isAdmi
     _, err := r.db.ExecContext(ctx, q, args...)
     return err
 }
-

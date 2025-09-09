@@ -1,25 +1,26 @@
 package order
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"crypto/tls"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
-	"sort"
-	"strconv"
-	"time"
+    "bytes"
+    "crypto/sha256"
+    "crypto/tls"
+    "encoding/hex"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "os"
+    "sort"
+    "strconv"
+    "strings"
+    "time"
 
 	"github.com/charmbracelet/log"
 	"github.com/jourloy/nutri-backend/internal/lib"
 )
 
 type TBankClient interface {
-	Init(amountMinor int64, orderId, userId, description, email string, returnURL *string, recursive bool) (paymentURL string, tbOrderId string, err error)
-	Charge(rebillId string, amountMinor int64, orderId string) error
+    Init(amountMinor int64, orderId, userId, description, email string, returnURL *string, recursive bool) (paymentURL string, tbOrderId string, err error)
+    Charge(rebillId string, amountMinor int64, orderId string) error
 }
 
 type tbankClient struct {
@@ -102,18 +103,33 @@ func signToken(secret string, fields map[string]any) string {
 }
 
 func (c *tbankClient) Init(amountMinor int64, orderId, userId, description, email string, returnURL *string, recursive bool) (string, string, error) {
-	amount := amountMinor * 100
-	payload := map[string]any{
-		"TerminalKey":     c.terminalKey,
-		"Amount":          amount,
-		"OrderId":         orderId,
-		"Description":     description,
-		"CustomerKey":     userId,
-		"NotificationURL": fmt.Sprintf("%s/order/webhook/tbank", lib.Config.MyURL),
-	}
-	if returnURL != nil {
-		payload["SuccessURL"] = *returnURL
-	}
+    amount := amountMinor * 100
+    payload := map[string]any{
+        "TerminalKey": c.terminalKey,
+        "Amount":      amount,
+        "OrderId":     orderId,
+        "Description": description,
+        "CustomerKey": userId,
+    }
+    if returnURL != nil {
+        payload["SuccessURL"] = *returnURL
+    }
+    // NotificationURL for RebillId and final status callbacks
+    my := lib.Config.MyURL
+    if my != "" {
+        if !strings.HasPrefix(my, "http://") && !strings.HasPrefix(my, "https://") {
+            my = "http://" + my
+        }
+        payload["NotificationURL"] = fmt.Sprintf("%s/order/notify/tbank", my)
+    }
+    // Always include FailURL redirecting to frontend with error flag
+    front := lib.Config.FrontURL
+    if front != "" {
+        if !strings.HasPrefix(front, "http://") && !strings.HasPrefix(front, "https://") {
+            front = "http://" + front
+        }
+        payload["FailURL"] = fmt.Sprintf("%s/prices?error=1", front)
+    }
 	if recursive {
 		payload["Recurrent"] = "Y"
 	}
@@ -131,7 +147,7 @@ func (c *tbankClient) Init(amountMinor int64, orderId, userId, description, emai
 		}
 	}
 
-	payload["Token"] = tok
+    payload["Token"] = tok
 	payload["Receipt"] = Receipt{
 		Items:    []Item{{Name: description, Quantity: 1, Price: amount, Amount: amount, Tax: "none"}},
 		Taxation: "usn_income",
@@ -169,8 +185,9 @@ func (c *tbankClient) Init(amountMinor int64, orderId, userId, description, emai
 		return "", "", fmt.Errorf("tbank init failed: %s", out.Message)
 	}
 
-	return out.PaymentURL, out.OrderId, nil
+    return out.PaymentURL, out.OrderId, nil
 }
+
 
 func (c *tbankClient) Charge(rebillId string, amountMinor int64, orderId string) error {
 	amount := amountMinor * 100

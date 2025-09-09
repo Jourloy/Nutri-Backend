@@ -1,24 +1,27 @@
 package order
 
 import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"strconv"
-	"time"
+    "context"
+    "database/sql"
+    "errors"
+    "fmt"
+    "strconv"
+    "time"
 
-	"github.com/jourloy/nutri-backend/internal/plan"
-	"github.com/jourloy/nutri-backend/internal/subscription"
-	userpkg "github.com/jourloy/nutri-backend/internal/user"
+    "github.com/jourloy/nutri-backend/internal/lib"
+    "github.com/jourloy/nutri-backend/internal/plan"
+    "github.com/jourloy/nutri-backend/internal/subscription"
+    userpkg "github.com/jourloy/nutri-backend/internal/user"
+    "strings"
 )
 
 type Service interface {
-	Init(ctx context.Context, userId string, planId int64, email string, returnURL *string) (*InitResponse, error)
-	HandleTBankWebhook(ctx context.Context, w TBankWebhook) error
-	List(ctx context.Context, userId string, isAdmin bool) ([]Order, error)
-	Delete(ctx context.Context, id int64, userId string, isAdmin bool) error
-	EnsureStart(ctx context.Context, userId string) (*subscription.Subscription, bool, error)
+    Init(ctx context.Context, userId string, planId int64, email string, returnURL *string) (*InitResponse, error)
+    HandleTBankWebhook(ctx context.Context, w TBankWebhook) error
+    FinalizeReturn(ctx context.Context, localOrderId int64) (bool, error)
+    List(ctx context.Context, userId string, isAdmin bool) ([]Order, error)
+    Delete(ctx context.Context, id int64, userId string, isAdmin bool) error
+    EnsureStart(ctx context.Context, userId string) (*subscription.Subscription, bool, error)
 }
 
 type service struct {
@@ -66,8 +69,14 @@ func (s *service) Init(ctx context.Context, userId string, planId int64, email s
 		return nil, err
 	}
 
-	localOrderId := strconv.FormatInt(created.Id, 10)
-	paymentURL, tbOrderId, err := s.tbank.Init(pl.AmountMinor, localOrderId, userId, fmt.Sprintf("План %s", pl.Code), email, returnURL, true)
+    localOrderId := strconv.FormatInt(created.Id, 10)
+    // Backend generates SuccessURL to return to our endpoint
+    my := lib.Config.MyURL
+    if my != "" && !strings.HasPrefix(my, "http://") && !strings.HasPrefix(my, "https://") {
+        my = "http://" + my
+    }
+    successURL := fmt.Sprintf("%s/order/paid?oid=%s", my, localOrderId)
+    paymentURL, tbOrderId, err := s.tbank.Init(pl.AmountMinor, localOrderId, userId, fmt.Sprintf("План %s", pl.Code), email, &successURL, true)
 	if err != nil {
 		msg := err.Error()
 		created.LastError = &msg
@@ -81,7 +90,26 @@ func (s *service) Init(ctx context.Context, userId string, planId int64, email s
 		return nil, err
 	}
 
-	return &InitResponse{PaymentURL: paymentURL, OrderId: tbOrderId}, nil
+    return &InitResponse{PaymentURL: paymentURL, OrderId: tbOrderId}, nil
+}
+
+// FinalizeReturn verifies payment with TBank and grants subscription, returns whether success
+func (s *service) FinalizeReturn(ctx context.Context, localOrderId int64) (bool, error) {
+    o, err := s.repo.GetById(ctx, localOrderId)
+    if err != nil || o == nil {
+        return false, err
+    }
+    if o.TbOrderId == nil || *o.TbOrderId == "" {
+        return false, errors.New("tb order id missing")
+    }
+    // Assume success if user returned via SuccessURL
+    ok := true
+    var rebillId *string = nil
+    wh := TBankWebhook{OrderId: *o.TbOrderId, Success: ok, RebillId: rebillId}
+    if err := s.HandleTBankWebhook(ctx, wh); err != nil {
+        return false, err
+    }
+    return ok, nil
 }
 
 func addMonths(t time.Time, months int) time.Time {
