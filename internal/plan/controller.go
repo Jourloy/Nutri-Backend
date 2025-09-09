@@ -47,12 +47,6 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 }
 
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.UserFromContext(r.Context())
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	resp, err := c.service.GetAllActive(context.Background())
 	if err != nil {
 		logger.Error("Error get all plans", "error", err)
