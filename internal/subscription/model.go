@@ -16,9 +16,10 @@ type Subscription struct {
 	Currency             string     `json:"currency" db:"currency"`
 	BillingPeriod        string     `json:"billing_period" db:"billing_period"`
 	ExternalSubscription *string    `json:"external_subscription_id,omitempty" db:"external_subscription_id"`
-	ExternalCustomer     *string    `json:"external_customer_id,omitempty" db:"external_customer_id"`
-	CreatedAt            time.Time  `json:"-" db:"created_at"`
-	UpdatedAt            time.Time  `json:"-" db:"updated_at"`
+    ExternalCustomer     *string    `json:"external_customer_id,omitempty" db:"external_customer_id"`
+    AdCode               *string    `json:"ad_code,omitempty" db:"ad_code"`
+    CreatedAt            time.Time  `json:"-" db:"created_at"`
+    UpdatedAt            time.Time  `json:"-" db:"updated_at"`
 }
 
 type SubscriptionCreate struct {
@@ -33,6 +34,7 @@ type SubscriptionCreate struct {
 	Currency             string     `json:"currency" db:"currency"`
 	BillingPeriod        string     `json:"billing_period" db:"billing_period"`
 	ExternalSubscription *string    `json:"external_subscription_id,omitempty" db:"external_subscription_id"`
-	ExternalCustomer     *string    `json:"external_customer_id,omitempty" db:"external_customer_id"`
-	UserId               string     `json:"-" db:"user_id"`
+    ExternalCustomer     *string    `json:"external_customer_id,omitempty" db:"external_customer_id"`
+    UserId               string     `json:"-" db:"user_id"`
+    AdCode               *string    `json:"ad_code,omitempty" db:"ad_code"`
 }

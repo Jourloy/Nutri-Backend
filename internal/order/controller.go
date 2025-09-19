@@ -61,7 +61,7 @@ func (c *Controller) Init(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := c.service.Init(context.Background(), u.Id, p.PlanId, p.Email, p.ReturnURL)
+    res, err := c.service.Init(context.Background(), u.Id, p.PlanId, p.Email, p.ReturnURL, p.AdCode)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

@@ -10,18 +10,20 @@ type Order struct {
 	AmountMinor int64      `json:"amountMinor" db:"amount_minor"`
 	Currency    string     `json:"currency" db:"currency"`
 	TbOrderId   *string    `json:"tbOrderId,omitempty" db:"tb_order_id"`
-	TbRebillId  *string    `json:"tbRebillId,omitempty" db:"tb_rebill_id"`
-	PaymentURL  *string    `json:"paymentUrl,omitempty" db:"payment_url"`
-	PaidAt      *time.Time `json:"paidAt,omitempty" db:"paid_at"`
-	LastError   *string    `json:"lastError,omitempty" db:"last_error"`
-	CreatedAt   time.Time  `json:"-" db:"created_at"`
-	UpdatedAt   time.Time  `json:"-" db:"updated_at"`
+    TbRebillId  *string    `json:"tbRebillId,omitempty" db:"tb_rebill_id"`
+    PaymentURL  *string    `json:"paymentUrl,omitempty" db:"payment_url"`
+    PaidAt      *time.Time `json:"paidAt,omitempty" db:"paid_at"`
+    LastError   *string    `json:"lastError,omitempty" db:"last_error"`
+    AdCode      *string    `json:"adCode,omitempty" db:"ad_code"`
+    CreatedAt   time.Time  `json:"-" db:"created_at"`
+    UpdatedAt   time.Time  `json:"-" db:"updated_at"`
 }
 
 type InitPayload struct {
-	PlanId    int64   `json:"planId"`
-	Email     string  `json:"email"`
-	ReturnURL *string `json:"returnUrl,omitempty"`
+    PlanId    int64   `json:"planId"`
+    Email     string  `json:"email"`
+    ReturnURL *string `json:"returnUrl,omitempty"`
+    AdCode    *string `json:"adCode,omitempty"`
 }
 
 type InitResponse struct {

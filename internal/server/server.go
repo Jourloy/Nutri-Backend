@@ -11,6 +11,7 @@ import (
     "github.com/go-chi/cors"
 
     "github.com/jourloy/nutri-backend/internal/achievement"
+    "github.com/jourloy/nutri-backend/internal/ad"
     "github.com/jourloy/nutri-backend/internal/analytics"
     "github.com/jourloy/nutri-backend/internal/body"
     "github.com/jourloy/nutri-backend/internal/auth"
@@ -69,6 +70,7 @@ func Start() error {
     telegram.NewController().RegisterRoutes(r)
     achievement.NewController().RegisterRoutes(r)
     analytics.NewController().RegisterRoutes(r)
+    ad.NewController().RegisterRoutes(r)
     body.NewController().RegisterRoutes(r)
 
     // Background workers

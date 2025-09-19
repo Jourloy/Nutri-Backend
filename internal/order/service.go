@@ -16,7 +16,7 @@ import (
 )
 
 type Service interface {
-    Init(ctx context.Context, userId string, planId int64, email string, returnURL *string) (*InitResponse, error)
+    Init(ctx context.Context, userId string, planId int64, email string, returnURL *string, adCode *string) (*InitResponse, error)
     HandleTBankWebhook(ctx context.Context, w TBankWebhook) error
     FinalizeReturn(ctx context.Context, localOrderId int64) (bool, error)
     List(ctx context.Context, userId string, isAdmin bool) ([]Order, error)
@@ -42,7 +42,7 @@ func NewService() Service {
 	}
 }
 
-func (s *service) Init(ctx context.Context, userId string, planId int64, email string, returnURL *string) (*InitResponse, error) {
+func (s *service) Init(ctx context.Context, userId string, planId int64, email string, returnURL *string, adCode *string) (*InitResponse, error) {
 	// Best-effort: persist email to the user's profile if provided
 	if email != "" {
 		_, _ = s.userRepo.UpdateEmail(ctx, userId, email)
@@ -63,7 +63,7 @@ func (s *service) Init(ctx context.Context, userId string, planId int64, email s
 		return nil, errors.New("plan not found")
 	}
 
-	placeholder := Order{Status: "pending", UserId: userId, PlanId: planId, AmountMinor: pl.AmountMinor, Currency: pl.Currency}
+    placeholder := Order{Status: "pending", UserId: userId, PlanId: planId, AmountMinor: pl.AmountMinor, Currency: pl.Currency, AdCode: adCode}
 	created, err := s.repo.Create(ctx, placeholder)
 	if err != nil {
 		return nil, err
@@ -183,36 +183,38 @@ func (s *service) HandleTBankWebhook(ctx context.Context, w TBankWebhook) error 
 	periodEnd := addMonths(periodStart, monthsForBillingPeriod(pl.BillingPeriod))
 
 	cur, _ := s.subRepo.GetByUser(ctx, o.UserId)
-	if cur == nil {
-		sc := subscription.SubscriptionCreate{
-			PlanId:               o.PlanId,
-			Status:               "active",
-			PeriodStart:          periodStart,
-			PeriodEnd:            periodEnd,
-			AmountMinor:          pl.AmountMinor,
-			Currency:             pl.Currency,
-			BillingPeriod:        pl.BillingPeriod,
-			ExternalSubscription: w.RebillId,
-			UserId:               o.UserId,
-		}
-		if _, err := s.subRepo.Create(ctx, sc); err != nil {
-			return err
-		}
-	} else {
-		cur.PlanId = o.PlanId
-		cur.Status = "active"
-		cur.PeriodStart = periodStart
-		cur.PeriodEnd = periodEnd
-		cur.AmountMinor = pl.AmountMinor
-		cur.Currency = pl.Currency
-		cur.BillingPeriod = pl.BillingPeriod
-		if w.RebillId != nil {
-			cur.ExternalSubscription = w.RebillId
-		}
-		if _, err := s.subRepo.Update(ctx, *cur); err != nil {
-			return err
-		}
-	}
+    if cur == nil {
+        sc := subscription.SubscriptionCreate{
+            PlanId:               o.PlanId,
+            Status:               "active",
+            PeriodStart:          periodStart,
+            PeriodEnd:            periodEnd,
+            AmountMinor:          pl.AmountMinor,
+            Currency:             pl.Currency,
+            BillingPeriod:        pl.BillingPeriod,
+            ExternalSubscription: w.RebillId,
+            UserId:               o.UserId,
+            AdCode:               o.AdCode,
+        }
+        if _, err := s.subRepo.Create(ctx, sc); err != nil {
+            return err
+        }
+    } else {
+        cur.PlanId = o.PlanId
+        cur.Status = "active"
+        cur.PeriodStart = periodStart
+        cur.PeriodEnd = periodEnd
+        cur.AmountMinor = pl.AmountMinor
+        cur.Currency = pl.Currency
+        cur.BillingPeriod = pl.BillingPeriod
+        if w.RebillId != nil {
+            cur.ExternalSubscription = w.RebillId
+        }
+        cur.AdCode = o.AdCode
+        if _, err := s.subRepo.Update(ctx, *cur); err != nil {
+            return err
+        }
+    }
 	return nil
 }
 

@@ -20,11 +20,11 @@ type repository struct { db *sqlx.DB }
 
 func NewRepository() Repository { return &repository{db: database.Database} }
 
-const columns = `id, status, user_id, plan_id, amount_minor, currency, tb_order_id, tb_rebill_id, payment_url, paid_at, last_error, created_at, updated_at`
+const columns = `id, status, user_id, plan_id, amount_minor, currency, tb_order_id, tb_rebill_id, payment_url, paid_at, last_error, ad_code, created_at, updated_at`
 
 func (r *repository) Create(ctx context.Context, o Order) (*Order, error) {
-    const q = `INSERT INTO orders (status, user_id, plan_id, amount_minor, currency, tb_order_id, tb_rebill_id, payment_url, paid_at, last_error)
-VALUES (:status,:user_id,:plan_id,:amount_minor,:currency,:tb_order_id,:tb_rebill_id,:payment_url,:paid_at,:last_error)
+    const q = `INSERT INTO orders (status, user_id, plan_id, amount_minor, currency, tb_order_id, tb_rebill_id, payment_url, paid_at, last_error, ad_code)
+VALUES (:status,:user_id,:plan_id,:amount_minor,:currency,:tb_order_id,:tb_rebill_id,:payment_url,:paid_at,:last_error,:ad_code)
 RETURNING ` + columns + `;`
     rows, err := r.db.NamedQueryContext(ctx, q, o)
     if err != nil { return nil, err }
@@ -34,7 +34,7 @@ RETURNING ` + columns + `;`
 }
 
 func (r *repository) Update(ctx context.Context, o Order) (*Order, error) {
-    const q = `UPDATE orders SET status=:status, user_id=:user_id, plan_id=:plan_id, amount_minor=:amount_minor, currency=:currency, tb_order_id=:tb_order_id, tb_rebill_id=:tb_rebill_id, payment_url=:payment_url, paid_at=:paid_at, last_error=:last_error, updated_at=now()
+    const q = `UPDATE orders SET status=:status, user_id=:user_id, plan_id=:plan_id, amount_minor=:amount_minor, currency=:currency, tb_order_id=:tb_order_id, tb_rebill_id=:tb_rebill_id, payment_url=:payment_url, paid_at=:paid_at, last_error=:last_error, ad_code=:ad_code, updated_at=now()
 WHERE id=:id RETURNING ` + columns + `;`
     rows, err := r.db.NamedQueryContext(ctx, q, o)
     if err != nil { return nil, err }

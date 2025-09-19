@@ -26,19 +26,19 @@ func NewRepository() Repository {
 }
 
 func (r *repository) Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error) {
-	const q = `
+    const q = `
         INSERT INTO subscriptions (
                 user_id, plan_id, status, period_start, period_end,
                 cancel_at, canceled_at, trial_end, amount_minor, currency,
-                billing_period, external_subscription_id, external_customer_id
+                billing_period, external_subscription_id, external_customer_id, ad_code
         ) VALUES (
                 :user_id, :plan_id, :status, :period_start, :period_end,
                 :cancel_at, :canceled_at, :trial_end, :amount_minor, :currency,
-                :billing_period, :external_subscription_id, :external_customer_id
+                :billing_period, :external_subscription_id, :external_customer_id, :ad_code
         )
         RETURNING id, user_id, plan_id, status, period_start, period_end,
                   cancel_at, canceled_at, trial_end, amount_minor, currency,
-                  billing_period, external_subscription_id, external_customer_id,
+                  billing_period, external_subscription_id, external_customer_id, ad_code,
                   created_at, updated_at;`
 
 	rows, err := r.db.NamedQueryContext(ctx, q, sc)
@@ -58,7 +58,7 @@ func (r *repository) Create(ctx context.Context, sc SubscriptionCreate) (*Subscr
 }
 
 func (r *repository) Update(ctx context.Context, s Subscription) (*Subscription, error) {
-	const q = `
+    const q = `
         UPDATE subscriptions SET
                 plan_id = :plan_id,
                 status = :status,
@@ -72,11 +72,12 @@ func (r *repository) Update(ctx context.Context, s Subscription) (*Subscription,
                 billing_period = :billing_period,
                 external_subscription_id = :external_subscription_id,
                 external_customer_id = :external_customer_id,
+                ad_code = :ad_code,
                 updated_at = now()
         WHERE id = :id AND user_id = :user_id
         RETURNING id, user_id, plan_id, status, period_start, period_end,
                   cancel_at, canceled_at, trial_end, amount_minor, currency,
-                  billing_period, external_subscription_id, external_customer_id,
+                  billing_period, external_subscription_id, external_customer_id, ad_code,
                   created_at, updated_at;`
 
 	rows, err := r.db.NamedQueryContext(ctx, q, s)
@@ -109,7 +110,7 @@ func (r *repository) GetByUser(ctx context.Context, userId string) (*Subscriptio
     const q = `
         SELECT id, user_id, plan_id, status, period_start, period_end,
                cancel_at, canceled_at, trial_end, amount_minor, currency,
-               billing_period, external_subscription_id, external_customer_id,
+               billing_period, external_subscription_id, external_customer_id, ad_code,
                created_at, updated_at
         FROM subscriptions
         WHERE user_id = $1
@@ -126,7 +127,7 @@ func (r *repository) GetAll(ctx context.Context) ([]Subscription, error) {
     const q = `
         SELECT id, user_id, plan_id, status, period_start, period_end,
                cancel_at, canceled_at, trial_end, amount_minor, currency,
-               billing_period, external_subscription_id, external_customer_id,
+               billing_period, external_subscription_id, external_customer_id, ad_code,
                created_at, updated_at
         FROM subscriptions
         ORDER BY created_at DESC`

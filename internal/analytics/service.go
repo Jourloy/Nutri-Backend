@@ -10,7 +10,7 @@ import (
 )
 
 type Service interface {
-	GetSeries(ctx context.Context, userId string, end time.Time, days int) (*SeriesResponse, error)
+    GetSeries(ctx context.Context, userId string, end time.Time, days int) (*SeriesResponse, error)
 }
 
 type service struct{ db *sqlx.DB }
@@ -98,3 +98,5 @@ func (s *service) getPlanType(ctx context.Context, userId string) string {
 	}
 	return planType
 }
+
+// tracking is implemented in the ad package
