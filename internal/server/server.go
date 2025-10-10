@@ -17,6 +17,7 @@ import (
     "github.com/jourloy/nutri-backend/internal/auth"
     "github.com/jourloy/nutri-backend/internal/database"
     "github.com/jourloy/nutri-backend/internal/feature"
+    "github.com/jourloy/nutri-backend/internal/feedback"
     "github.com/jourloy/nutri-backend/internal/fit"
     "github.com/jourloy/nutri-backend/internal/middlewares"
 	"github.com/jourloy/nutri-backend/internal/plan"
@@ -72,6 +73,7 @@ func Start() error {
     analytics.NewController().RegisterRoutes(r)
     ad.NewController().RegisterRoutes(r)
     body.NewController().RegisterRoutes(r)
+    feedback.NewController().RegisterRoutes(r)
 
     // Background workers
     order.StartWorker()
