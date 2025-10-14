@@ -1,31 +1,31 @@
 package server
 
 import (
-    "net/http"
-    "os"
-    "time"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-    "github.com/go-chi/cors"
+	"github.com/go-chi/cors"
 
-    "github.com/jourloy/nutri-backend/internal/achievement"
-    "github.com/jourloy/nutri-backend/internal/ad"
-    "github.com/jourloy/nutri-backend/internal/analytics"
-    "github.com/jourloy/nutri-backend/internal/body"
-    "github.com/jourloy/nutri-backend/internal/auth"
-    "github.com/jourloy/nutri-backend/internal/database"
-    "github.com/jourloy/nutri-backend/internal/feature"
-    "github.com/jourloy/nutri-backend/internal/feedback"
-    "github.com/jourloy/nutri-backend/internal/fit"
-    "github.com/jourloy/nutri-backend/internal/middlewares"
-	"github.com/jourloy/nutri-backend/internal/plan"
+	"github.com/jourloy/nutri-backend/internal/achievement"
+	"github.com/jourloy/nutri-backend/internal/ad"
+	"github.com/jourloy/nutri-backend/internal/analytics"
+	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/nutri-backend/internal/body"
+	"github.com/jourloy/nutri-backend/internal/database"
+	"github.com/jourloy/nutri-backend/internal/feature"
+	"github.com/jourloy/nutri-backend/internal/feedback"
+	"github.com/jourloy/nutri-backend/internal/fit"
+	"github.com/jourloy/nutri-backend/internal/middlewares"
 	"github.com/jourloy/nutri-backend/internal/order"
+	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/product"
 	"github.com/jourloy/nutri-backend/internal/subscription"
-	"github.com/jourloy/nutri-backend/internal/template"
 	"github.com/jourloy/nutri-backend/internal/telegram"
+	"github.com/jourloy/nutri-backend/internal/template"
 	"github.com/jourloy/nutri-backend/internal/user"
 )
 
@@ -65,25 +65,25 @@ func Start() error {
 	product.NewController().RegisterRoutes(r)
 	plan.NewController().RegisterRoutes(r)
 	order.NewController().RegisterRoutes(r)
-    feature.NewController().RegisterRoutes(r)
-    subscription.NewController().RegisterRoutes(r)
-    template.NewController().RegisterRoutes(r)
-    telegram.NewController().RegisterRoutes(r)
-    achievement.NewController().RegisterRoutes(r)
-    analytics.NewController().RegisterRoutes(r)
-    ad.NewController().RegisterRoutes(r)
-    body.NewController().RegisterRoutes(r)
-    feedback.NewController().RegisterRoutes(r)
+	feature.NewController().RegisterRoutes(r)
+	subscription.NewController().RegisterRoutes(r)
+	template.NewController().RegisterRoutes(r)
+	telegram.NewController().RegisterRoutes(r)
+	achievement.NewController().RegisterRoutes(r)
+	analytics.NewController().RegisterRoutes(r)
+	ad.NewController().RegisterRoutes(r)
+	body.NewController().RegisterRoutes(r)
+	feedback.NewController().RegisterRoutes(r)
 
-    // Background workers
-    order.StartWorker()
-    body.StartWorker()
+	// Background workers
+	order.StartWorker()
+	body.StartWorker()
 
 	logger.Debug("Handlers initialized", "latency", time.Since(tempTime))
 
 	// Start server
-	logger.Info("Server started", "port", 3001, "latency (total)", time.Since(totalTime))
-	err := http.ListenAndServe("0.0.0.0:3001", r)
+	logger.Info("Server started", "port", 3002, "latency (total)", time.Since(totalTime))
+	err := http.ListenAndServe("0.0.0.0:3002", r)
 	if err != nil {
 		return err
 	}
