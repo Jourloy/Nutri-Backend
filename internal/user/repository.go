@@ -10,13 +10,14 @@ import (
 )
 
 type Repository interface {
-    CreateUser(ctx context.Context, user *UserCreate) (*User, error)
-    GetUser(ctx context.Context, id string) (*User, error)
-    GetUserByUsername(ctx context.Context, username string) (*User, error)
-    IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
-    UpdateLogin(ctx context.Context, uid string) error
-    DeleteUser(ctx context.Context, id string) (*User, error)
-    UpdateEmail(ctx context.Context, uid string, email string) (*User, error)
+	CreateUser(ctx context.Context, user *UserCreate) (*User, error)
+	GetUser(ctx context.Context, id string) (*User, error)
+	GetUserByUsername(ctx context.Context, username string) (*User, error)
+	IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
+	UpdateLogin(ctx context.Context, uid string) error
+	DeleteUser(ctx context.Context, id string) (*User, error)
+	UpdateEmail(ctx context.Context, uid string, email string) (*User, error)
+	InvalidateTokens(ctx context.Context, id string) error
 }
 
 type repository struct {
@@ -141,33 +142,86 @@ func (r *repository) UpdateLogin(ctx context.Context, uid string) error {
 }
 
 func (r *repository) DeleteUser(ctx context.Context, id string) (*User, error) {
-	// Полное удаление. Если используешь soft-delete — замени на UPDATE ... SET deleted_at = now() RETURNING ...
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Удаляем все связанные записи вручную, так как большинство FK без ON DELETE CASCADE.
+	deletions := []struct {
+		query string
+		args  []any
+	}{
+		{query: `DELETE FROM products WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM body_weights WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM body_measurements WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM body_plateau_events WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM body_activity WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM orders WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM user_achievements WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM telegram_profiles WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM coach_clients WHERE coach_user_id = $1 OR client_user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM subscriptions WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM fit_profiles WHERE user_id = $1`, args: []any{id}},
+	}
+
+	for _, d := range deletions {
+		if _, err = tx.ExecContext(ctx, d.query, d.args...); err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+	}
+
 	const q = `DELETE FROM users WHERE id = $1 RETURNING ` + userColumns + `;`
 
 	var u User
-	if err := r.db.GetContext(ctx, &u, q, id); err != nil {
+	if err = tx.GetContext(ctx, &u, q, id); err != nil {
 		if err == sql.ErrNoRows {
+			_ = tx.Rollback()
 			return nil, nil
 		}
+		_ = tx.Rollback()
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &u, nil
 }
 
+func (r *repository) InvalidateTokens(ctx context.Context, id string) error {
+	const q = `
+		UPDATE users
+		SET token_version = token_version + 1,
+			updated_at = now()
+		WHERE id = $1
+		RETURNING id;`
+
+	var uid string
+	if err := r.db.GetContext(ctx, &uid, q, id); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func (r *repository) UpdateEmail(ctx context.Context, uid string, email string) (*User, error) {
-    const q = `
+	const q = `
         UPDATE users
         SET email = $2,
             updated_at = now()
         WHERE id = $1
         RETURNING ` + userColumns + `;`
 
-    var u User
-    if err := r.db.GetContext(ctx, &u, q, uid, email); err != nil {
-        if err == sql.ErrNoRows {
-            return nil, nil
-        }
-        return nil, err
-    }
-    return &u, nil
+	var u User
+	if err := r.db.GetContext(ctx, &u, q, uid, email); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &u, nil
 }

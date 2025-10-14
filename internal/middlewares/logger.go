@@ -36,8 +36,8 @@ func Logger(next http.Handler) http.Handler {
 		)
 
 		// If request latency is over limit
-		if time.Duration(latency.Milliseconds()) > 500 {
-			logger.Warn("Latency is over 500ms")
+		if time.Duration(latency.Milliseconds()) > 1000 {
+			logger.Warn("Latency is over 1s")
 		}
 	})
 }

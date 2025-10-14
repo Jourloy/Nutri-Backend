@@ -11,6 +11,7 @@ type Service interface {
 	IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
 	UpdateLogin(ctx context.Context, uid string) error
 	DeleteUser(ctx context.Context, id string) (*User, error)
+	InvalidateTokens(ctx context.Context, id string) error
 }
 
 type service struct {
@@ -43,4 +44,8 @@ func (s *service) UpdateLogin(ctx context.Context, uid string) error {
 
 func (s *service) DeleteUser(ctx context.Context, id string) (*User, error) {
 	return s.repo.DeleteUser(ctx, id)
+}
+
+func (s *service) InvalidateTokens(ctx context.Context, id string) error {
+	return s.repo.InvalidateTokens(ctx, id)
 }

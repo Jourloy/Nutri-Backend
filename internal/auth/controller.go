@@ -32,6 +32,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/register", c.Register)
 		r.Post("/login", c.Login)
 		r.Post("/refresh", c.Refresh)
+		r.Post("/logout", c.Logout)
 		r.Post("/me", c.Me)
 		r.Post("/view/updates", c.IncreaseViewUpdates)
 		r.Delete("/me", c.DeleteMe)
@@ -41,6 +42,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   POST /register")
 	logger.Info("║   POST /login")
 	logger.Info("║   POST /refresh")
+	logger.Info("║   POST /logout")
 	logger.Info("║   POST /me")
 	logger.Info("║   POST /view/updates")
 	logger.Info("║ DELETE /me")
@@ -157,6 +159,23 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(u)
+}
+
+func (c *Controller) Logout(w http.ResponseWriter, r *http.Request) {
+	u, ok := UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := c.service.Logout(u.Id); err != nil {
+		logger.Warn("logout failed", "err", err)
+		http.Error(w, "failed to logout", http.StatusInternalServerError)
+		return
+	}
+
+	c.setAuthCookies(w, "", "")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (c *Controller) DeleteMe(w http.ResponseWriter, r *http.Request) {
