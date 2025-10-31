@@ -1,0 +1,11 @@
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS locale VARCHAR(8);
+
+UPDATE users
+SET locale = COALESCE(locale, 'ru');
+
+ALTER TABLE users
+ALTER COLUMN locale SET DEFAULT 'ru';
+
+ALTER TABLE users
+ALTER COLUMN locale SET NOT NULL;

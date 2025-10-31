@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
@@ -35,6 +36,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/logout", c.Logout)
 		r.Post("/me", c.Me)
 		r.Post("/view/updates", c.IncreaseViewUpdates)
+		r.Patch("/locale", c.UpdateLocale)
 		r.Delete("/me", c.DeleteMe)
 	})
 
@@ -45,8 +47,13 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   POST /logout")
 	logger.Info("║   POST /me")
 	logger.Info("║   POST /view/updates")
+	logger.Info("║   PATCH /locale")
 	logger.Info("║ DELETE /me")
 	logger.Info("╚═════")
+}
+
+type updateLocaleRequest struct {
+	Locale string `json:"locale"`
 }
 
 func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh string) {
@@ -194,4 +201,39 @@ func (c *Controller) DeleteMe(w http.ResponseWriter, r *http.Request) {
 
 	c.setAuthCookies(w, "", "")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (c *Controller) UpdateLocale(w http.ResponseWriter, r *http.Request) {
+	u, ok := UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req updateLocaleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	locale := strings.ToLower(req.Locale)
+	if locale != "ru" && locale != "en" {
+		http.Error(w, "unsupported locale", http.StatusBadRequest)
+		return
+	}
+
+	updated, err := c.service.UpdateLocale(r.Context(), u.Id, locale)
+	if err != nil {
+		logger.Error("update locale failed", "err", err)
+		http.Error(w, "failed to update locale", http.StatusInternalServerError)
+		return
+	}
+	if updated == nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(updated)
 }
