@@ -115,7 +115,7 @@ func (r *repository) Delete(ctx context.Context, id int64, userID string, isAdmi
 
 func (r *repository) SaveNotification(ctx context.Context, n CloudPaymentsNotificationCreate) (*CloudPaymentsNotification, error) {
 	const q = `INSERT INTO cloudpayments_notifications (type, invoice_id, order_id, subscription_id, payload, headers)
-VALUES (:type, :invoice_id, :order_id, :subscription_id, :payload::jsonb, :headers::jsonb)
+VALUES (:type, :invoice_id, :order_id, :subscription_id, CAST(:payload AS jsonb), CAST(:headers AS jsonb))
 RETURNING id, type, invoice_id, order_id, subscription_id, payload, headers, created_at;`
 	rows, err := r.db.NamedQueryContext(ctx, q, n)
 	if err != nil {

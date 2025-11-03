@@ -495,12 +495,17 @@ func (s *service) HandleCloudPaymentsNotification(ctx context.Context, notifType
 	subscriptionID := cpExtractString(payload, "SubscriptionId")
 	orderID := parseOrderID(invoice)
 
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
 	notif := CloudPaymentsNotificationCreate{
 		Type:           nt,
 		InvoiceId:      stringPtr(invoice),
 		OrderId:        orderID,
 		SubscriptionId: stringPtr(subscriptionID),
-		Payload:        string(body),
+		Payload:        string(payloadJSON),
 		Headers:        cpHeadersJSON(headers),
 	}
 	if _, err := s.repo.SaveNotification(ctx, notif); err != nil {
