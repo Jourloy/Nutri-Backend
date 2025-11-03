@@ -3,6 +3,7 @@ package order
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,11 +32,17 @@ func NewCloudPaymentsClient() CloudPaymentsClient {
 		base = "https://api.cloudpayments.ru"
 	}
 	base = strings.TrimSuffix(base, "/")
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
 	return &cloudPaymentsClient{
 		baseURL:    base,
 		publicID:   lib.Config.CloudPaymentsPublicID,
 		secret:     lib.Config.CloudPaymentsAPISecret,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		httpClient: client,
 	}
 }
 
