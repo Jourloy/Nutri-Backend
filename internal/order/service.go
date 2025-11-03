@@ -1,13 +1,13 @@
 package order
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -351,6 +351,40 @@ func cpSchedule(period string) (string, int) {
 		return "Month", 1
 	}
 }
+
+func parseCloudPaymentsPayload(body []byte, headers map[string]string) (map[string]any, error) {
+	ct := ""
+	if headers != nil {
+		if v, ok := headers["Content-Type"]; ok {
+			ct = v
+		} else if v, ok := headers["content-type"]; ok {
+			ct = v
+		}
+	}
+	ct = strings.ToLower(ct)
+
+	var data map[string]any
+
+	switch {
+	case strings.Contains(ct, "application/json"):
+		if err := json.Unmarshal(body, &data); err != nil {
+			return nil, err
+		}
+	default:
+		values, err := url.ParseQuery(string(body))
+		if err != nil {
+			return nil, err
+		}
+		data = make(map[string]any, len(values))
+		for key, vals := range values {
+			if len(vals) == 0 {
+				continue
+			}
+			data[key] = vals[0]
+		}
+	}
+	return data, nil
+}
 func (s *service) processPaidOrder(ctx context.Context, o *Order, paidAt time.Time, externalSub *string) error {
 	if o == nil {
 		return errors.New("order not found")
@@ -452,10 +486,8 @@ func (s *service) HandleTBankWebhook(ctx context.Context, w TBankWebhook) error 
 func (s *service) HandleCloudPaymentsNotification(ctx context.Context, notifType string, body []byte, headers map[string]string) (map[string]any, error) {
 	nt := strings.ToLower(notifType)
 
-	var payload map[string]any
-	dec := json.NewDecoder(bytes.NewReader(body))
-	dec.UseNumber()
-	if err := dec.Decode(&payload); err != nil {
+	payload, err := parseCloudPaymentsPayload(body, headers)
+	if err != nil {
 		return nil, err
 	}
 
