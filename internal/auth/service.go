@@ -40,6 +40,7 @@ type Service interface {
 	IncreaseViewUpdates(ctx context.Context, uid string) (*user.User, error)
 	Logout(id string) error
 	Delete(id string) error
+	UpdateLocale(ctx context.Context, uid string, locale string) (*user.User, error)
 }
 
 type service struct {
@@ -144,9 +145,15 @@ func (s *service) Register(body RegisterData) (*LoginResponse, error) {
 		return nil, err
 	}
 
+	locale := strings.ToLower(body.Locale)
+	if locale != "en" && locale != "ru" {
+		locale = "ru"
+	}
+
 	u, err := s.userService.CreateUser(&user.UserCreate{
 		Username:     body.Username,
 		PasswordHash: hash,
+		Locale:       locale,
 	})
 	if err != nil {
 		return nil, err
@@ -234,4 +241,8 @@ func (s *service) Logout(id string) error {
 func (s *service) Delete(id string) error {
 	_, err := s.userService.DeleteUser(context.Background(), id)
 	return err
+}
+
+func (s *service) UpdateLocale(ctx context.Context, uid string, locale string) (*user.User, error) {
+	return s.userService.UpdateLocale(ctx, uid, locale)
 }

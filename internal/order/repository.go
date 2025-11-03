@@ -1,75 +1,133 @@
 package order
 
 import (
-    "context"
+	"context"
 
-    "github.com/jmoiron/sqlx"
-    "github.com/jourloy/nutri-backend/internal/database"
+	"github.com/jmoiron/sqlx"
+	"github.com/jourloy/nutri-backend/internal/database"
 )
 
 type Repository interface {
-    Create(ctx context.Context, o Order) (*Order, error)
-    Update(ctx context.Context, o Order) (*Order, error)
-    GetByTbOrderId(ctx context.Context, tbOrderId string) (*Order, error)
-    GetById(ctx context.Context, id int64) (*Order, error)
-    GetAll(ctx context.Context, userID string, isAdmin bool) ([]Order, error)
-    Delete(ctx context.Context, id int64, userID string, isAdmin bool) error
+	Create(ctx context.Context, o Order) (*Order, error)
+	Update(ctx context.Context, o Order) (*Order, error)
+	GetByTbOrderId(ctx context.Context, tbOrderId string) (*Order, error)
+	GetByCpOrderId(ctx context.Context, cpOrderId string) (*Order, error)
+	GetById(ctx context.Context, id int64) (*Order, error)
+	GetAll(ctx context.Context, userID string, isAdmin bool) ([]Order, error)
+	Delete(ctx context.Context, id int64, userID string, isAdmin bool) error
+	SaveNotification(ctx context.Context, n CloudPaymentsNotificationCreate) (*CloudPaymentsNotification, error)
 }
 
-type repository struct { db *sqlx.DB }
+type repository struct{ db *sqlx.DB }
 
 func NewRepository() Repository { return &repository{db: database.Database} }
 
-const columns = `id, status, user_id, plan_id, amount_minor, currency, tb_order_id, tb_rebill_id, payment_url, paid_at, last_error, ad_code, created_at, updated_at`
+const columns = `id, status, user_id, plan_id, amount_minor, currency, provider, tb_order_id, tb_rebill_id, cp_order_id, cp_transaction_id, cp_subscription_id, payment_url, paid_at, last_error, ad_code, created_at, updated_at`
 
 func (r *repository) Create(ctx context.Context, o Order) (*Order, error) {
-    const q = `INSERT INTO orders (status, user_id, plan_id, amount_minor, currency, tb_order_id, tb_rebill_id, payment_url, paid_at, last_error, ad_code)
-VALUES (:status,:user_id,:plan_id,:amount_minor,:currency,:tb_order_id,:tb_rebill_id,:payment_url,:paid_at,:last_error,:ad_code)
+	const q = `INSERT INTO orders (status, user_id, plan_id, amount_minor, currency, provider, tb_order_id, tb_rebill_id, cp_order_id, cp_transaction_id, cp_subscription_id, payment_url, paid_at, last_error, ad_code)
+VALUES (:status,:user_id,:plan_id,:amount_minor,:currency,:provider,:tb_order_id,:tb_rebill_id,:cp_order_id,:cp_transaction_id,:cp_subscription_id,:payment_url,:paid_at,:last_error,:ad_code)
 RETURNING ` + columns + `;`
-    rows, err := r.db.NamedQueryContext(ctx, q, o)
-    if err != nil { return nil, err }
-    defer rows.Close()
-    if rows.Next() { var res Order; if err := rows.StructScan(&res); err != nil { return nil, err }; return &res, nil }
-    return nil, nil
+	rows, err := r.db.NamedQueryContext(ctx, q, o)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var res Order
+		if err := rows.StructScan(&res); err != nil {
+			return nil, err
+		}
+		return &res, nil
+	}
+	return nil, nil
 }
 
 func (r *repository) Update(ctx context.Context, o Order) (*Order, error) {
-    const q = `UPDATE orders SET status=:status, user_id=:user_id, plan_id=:plan_id, amount_minor=:amount_minor, currency=:currency, tb_order_id=:tb_order_id, tb_rebill_id=:tb_rebill_id, payment_url=:payment_url, paid_at=:paid_at, last_error=:last_error, ad_code=:ad_code, updated_at=now()
+	const q = `UPDATE orders SET status=:status, user_id=:user_id, plan_id=:plan_id, amount_minor=:amount_minor, currency=:currency, provider=:provider, tb_order_id=:tb_order_id, tb_rebill_id=:tb_rebill_id, cp_order_id=:cp_order_id, cp_transaction_id=:cp_transaction_id, cp_subscription_id=:cp_subscription_id, payment_url=:payment_url, paid_at=:paid_at, last_error=:last_error, ad_code=:ad_code, updated_at=now()
 WHERE id=:id RETURNING ` + columns + `;`
-    rows, err := r.db.NamedQueryContext(ctx, q, o)
-    if err != nil { return nil, err }
-    defer rows.Close()
-    if rows.Next() { var res Order; if err := rows.StructScan(&res); err != nil { return nil, err }; return &res, nil }
-    return nil, nil
+	rows, err := r.db.NamedQueryContext(ctx, q, o)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var res Order
+		if err := rows.StructScan(&res); err != nil {
+			return nil, err
+		}
+		return &res, nil
+	}
+	return nil, nil
 }
 
 func (r *repository) GetByTbOrderId(ctx context.Context, tbOrderId string) (*Order, error) {
-    const q = `SELECT ` + columns + ` FROM orders WHERE tb_order_id=$1`
-    var o Order
-    if err := r.db.GetContext(ctx, &o, q, tbOrderId); err != nil { return nil, err }
-    return &o, nil
+	const q = `SELECT ` + columns + ` FROM orders WHERE tb_order_id=$1`
+	var o Order
+	if err := r.db.GetContext(ctx, &o, q, tbOrderId); err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+func (r *repository) GetByCpOrderId(ctx context.Context, cpOrderId string) (*Order, error) {
+	const q = `SELECT ` + columns + ` FROM orders WHERE cp_order_id=$1`
+	var o Order
+	if err := r.db.GetContext(ctx, &o, q, cpOrderId); err != nil {
+		return nil, err
+	}
+	return &o, nil
 }
 
 func (r *repository) GetById(ctx context.Context, id int64) (*Order, error) {
-    const q = `SELECT ` + columns + ` FROM orders WHERE id=$1`
-    var o Order
-    if err := r.db.GetContext(ctx, &o, q, id); err != nil { return nil, err }
-    return &o, nil
+	const q = `SELECT ` + columns + ` FROM orders WHERE id=$1`
+	var o Order
+	if err := r.db.GetContext(ctx, &o, q, id); err != nil {
+		return nil, err
+	}
+	return &o, nil
 }
 
 func (r *repository) GetAll(ctx context.Context, userID string, isAdmin bool) ([]Order, error) {
-    q := `SELECT ` + columns + ` FROM orders`
-    args := []any{}
-    if !isAdmin || userID != "" { q += ` WHERE user_id=$1`; args = append(args, userID) }
-    var res []Order
-    if err := r.db.SelectContext(ctx, &res, q, args...); err != nil { return nil, err }
-    return res, nil
+	q := `SELECT ` + columns + ` FROM orders`
+	args := []any{}
+	if !isAdmin || userID != "" {
+		q += ` WHERE user_id=$1`
+		args = append(args, userID)
+	}
+	var res []Order
+	if err := r.db.SelectContext(ctx, &res, q, args...); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (r *repository) Delete(ctx context.Context, id int64, userID string, isAdmin bool) error {
-    q := `DELETE FROM orders WHERE id=$1`
-    args := []any{id}
-    if !isAdmin { q += ` AND user_id=$2`; args = append(args, userID) }
-    _, err := r.db.ExecContext(ctx, q, args...)
-    return err
+	q := `DELETE FROM orders WHERE id=$1`
+	args := []any{id}
+	if !isAdmin {
+		q += ` AND user_id=$2`
+		args = append(args, userID)
+	}
+	_, err := r.db.ExecContext(ctx, q, args...)
+	return err
+}
+
+func (r *repository) SaveNotification(ctx context.Context, n CloudPaymentsNotificationCreate) (*CloudPaymentsNotification, error) {
+	const q = `INSERT INTO cloudpayments_notifications (type, invoice_id, order_id, subscription_id, payload, headers)
+VALUES (:type, :invoice_id, :order_id, :subscription_id, :payload::jsonb, :headers::jsonb)
+RETURNING id, type, invoice_id, order_id, subscription_id, payload, headers, created_at;`
+	rows, err := r.db.NamedQueryContext(ctx, q, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var res CloudPaymentsNotification
+		if err := rows.StructScan(&res); err != nil {
+			return nil, err
+		}
+		return &res, nil
+	}
+	return nil, nil
 }

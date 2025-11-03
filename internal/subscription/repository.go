@@ -9,12 +9,13 @@ import (
 )
 
 type Repository interface {
-    Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error)
-    Update(ctx context.Context, s Subscription) (*Subscription, error)
-    Delete(ctx context.Context, id int64, uid string) error
-    // Additional getters for orders/renewals integration
-    GetByUser(ctx context.Context, userId string) (*Subscription, error)
-    GetAll(ctx context.Context) ([]Subscription, error)
+	Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error)
+	Update(ctx context.Context, s Subscription) (*Subscription, error)
+	Delete(ctx context.Context, id int64, uid string) error
+	// Additional getters for orders/renewals integration
+	GetByUser(ctx context.Context, userId string) (*Subscription, error)
+	GetAll(ctx context.Context) ([]Subscription, error)
+	GetByExternalSubscription(ctx context.Context, externalID string) (*Subscription, error)
 }
 
 type repository struct {
@@ -26,7 +27,7 @@ func NewRepository() Repository {
 }
 
 func (r *repository) Create(ctx context.Context, sc SubscriptionCreate) (*Subscription, error) {
-    const q = `
+	const q = `
         INSERT INTO subscriptions (
                 user_id, plan_id, status, period_start, period_end,
                 cancel_at, canceled_at, trial_end, amount_minor, currency,
@@ -58,7 +59,7 @@ func (r *repository) Create(ctx context.Context, sc SubscriptionCreate) (*Subscr
 }
 
 func (r *repository) Update(ctx context.Context, s Subscription) (*Subscription, error) {
-    const q = `
+	const q = `
         UPDATE subscriptions SET
                 plan_id = :plan_id,
                 status = :status,
@@ -107,7 +108,7 @@ func (r *repository) Delete(ctx context.Context, id int64, uid string) error {
 }
 
 func (r *repository) GetByUser(ctx context.Context, userId string) (*Subscription, error) {
-    const q = `
+	const q = `
         SELECT id, user_id, plan_id, status, period_start, period_end,
                cancel_at, canceled_at, trial_end, amount_minor, currency,
                billing_period, external_subscription_id, external_customer_id, ad_code,
@@ -116,24 +117,41 @@ func (r *repository) GetByUser(ctx context.Context, userId string) (*Subscriptio
         WHERE user_id = $1
         ORDER BY created_at DESC
         LIMIT 1;`
-    var s Subscription
-    if err := r.db.GetContext(ctx, &s, q, userId); err != nil {
-        return nil, err
-    }
-    return &s, nil
+	var s Subscription
+	if err := r.db.GetContext(ctx, &s, q, userId); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 func (r *repository) GetAll(ctx context.Context) ([]Subscription, error) {
-    const q = `
+	const q = `
         SELECT id, user_id, plan_id, status, period_start, period_end,
                cancel_at, canceled_at, trial_end, amount_minor, currency,
                billing_period, external_subscription_id, external_customer_id, ad_code,
                created_at, updated_at
         FROM subscriptions
         ORDER BY created_at DESC`
-    var res []Subscription
-    if err := r.db.SelectContext(ctx, &res, q); err != nil {
-        return nil, err
-    }
-    return res, nil
+	var res []Subscription
+	if err := r.db.SelectContext(ctx, &res, q); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *repository) GetByExternalSubscription(ctx context.Context, externalID string) (*Subscription, error) {
+	const q = `
+        SELECT id, user_id, plan_id, status, period_start, period_end,
+               cancel_at, canceled_at, trial_end, amount_minor, currency,
+               billing_period, external_subscription_id, external_customer_id, ad_code,
+               created_at, updated_at
+        FROM subscriptions
+        WHERE external_subscription_id = $1
+        ORDER BY updated_at DESC
+        LIMIT 1;`
+	var s Subscription
+	if err := r.db.GetContext(ctx, &s, q, externalID); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }

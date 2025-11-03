@@ -1,19 +1,23 @@
 package order
 
 import (
-    "context"
-    "encoding/json"
-    "io"
-    "net/http"
-    "os"
-    "strconv"
-    "strings"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
 
-    "github.com/charmbracelet/log"
-    "github.com/go-chi/chi/v5"
+	"github.com/charmbracelet/log"
+	"github.com/go-chi/chi/v5"
 
-    "github.com/jourloy/nutri-backend/internal/auth"
-    "github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/nutri-backend/internal/lib"
 )
 
 var (
@@ -25,22 +29,24 @@ type Controller struct{ service Service }
 func NewController() *Controller { return &Controller{service: NewService()} }
 
 func (c *Controller) RegisterRoutes(r chi.Router) {
-    r.Route("/order", func(r chi.Router) {
-        r.Post("/init", c.Init)
-        r.Get("/paid", c.Paid)
-        r.Post("/notify/tbank", c.NotifyTBank)
-        r.Get("/all", c.GetAll)
-        r.Delete("/{id}", c.Delete)
-        r.Post("/ensure-start", c.EnsureStart)
-    })
-    logger.Info("╔═════ Order")
-    logger.Info("║   GET /all")
-    logger.Info("║  POST /init")
-    logger.Info("║   GET /paid")
-    logger.Info("║  POST /notify/tbank")
-    logger.Info("║  POST /ensure-start")
-    logger.Info("║ DELETE /{id}")
-    logger.Info("╚═════")
+	r.Route("/order", func(r chi.Router) {
+		r.Post("/init", c.Init)
+		r.Get("/paid", c.Paid)
+		r.Post("/notify/tbank", c.NotifyTBank)
+		r.Post("/notify/cloudpayments/{type}", c.NotifyCloudPayments)
+		r.Get("/all", c.GetAll)
+		r.Delete("/{id}", c.Delete)
+		r.Post("/ensure-start", c.EnsureStart)
+	})
+	logger.Info("╔═════ Order")
+	logger.Info("║   GET /all")
+	logger.Info("║  POST /init")
+	logger.Info("║   GET /paid")
+	logger.Info("║  POST /notify/tbank")
+	logger.Info("║  POST /notify/cloudpayments/{type}")
+	logger.Info("║  POST /ensure-start")
+	logger.Info("║ DELETE /{id}")
+	logger.Info("╚═════")
 }
 
 func (c *Controller) Init(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +67,7 @@ func (c *Controller) Init(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    res, err := c.service.Init(context.Background(), u.Id, p.PlanId, p.Email, p.ReturnURL, p.AdCode)
+	res, err := c.service.Init(context.Background(), u.Id, p.PlanId, p.Email, p.ReturnURL, p.AdCode)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -85,10 +91,10 @@ func (c *Controller) Paid(w http.ResponseWriter, r *http.Request) {
 	}
 	ok, err := c.service.FinalizeReturn(context.Background(), oid)
 	// Compose redirect URL
-    front := lib.Config.FrontURL
-    if front == "" {
-        front = "127.0.0.1" // fallback to avoid empty
-    }
+	front := lib.Config.FrontURL
+	if front == "" {
+		front = "127.0.0.1" // fallback to avoid empty
+	}
 	if !strings.HasPrefix(front, "http://") && !strings.HasPrefix(front, "https://") {
 		front = "http://" + front
 	}
@@ -99,47 +105,110 @@ func (c *Controller) Paid(w http.ResponseWriter, r *http.Request) {
 	} else {
 		dest = front + "/app"
 	}
-    http.Redirect(w, r, dest, http.StatusFound)
+	http.Redirect(w, r, dest, http.StatusFound)
 }
 
 // NotifyTBank receives asynchronous notifications from TBank (NotificationURL)
 // and updates order/subscription, including saving RebillId for recurring charges.
 func (c *Controller) NotifyTBank(w http.ResponseWriter, r *http.Request) {
-    // Read raw body for signature verification
-    raw, err := io.ReadAll(r.Body)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    // Parse into generic map to compute Token
-    var mm map[string]any
-    if err := json.Unmarshal(raw, &mm); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    recvToken, _ := mm["Token"].(string)
-    if recvToken == "" {
-        http.Error(w, "no token", http.StatusForbidden)
-        return
-    }
-    // Compute expected token using terminal password
-    secret := lib.Config.TbankTerminalPassword
-    exp := signToken(secret, mm)
-    if strings.ToLower(recvToken) != strings.ToLower(exp) {
-        http.Error(w, "invalid token", http.StatusForbidden)
-        return
-    }
-    // Decode to typed payload
-    var p TBankWebhook
-    if err := json.Unmarshal(raw, &p); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    if err := c.service.HandleTBankWebhook(context.Background(), p); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    w.WriteHeader(http.StatusOK)
+	// Read raw body for signature verification
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Parse into generic map to compute Token
+	var mm map[string]any
+	if err := json.Unmarshal(raw, &mm); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	recvToken, _ := mm["Token"].(string)
+	if recvToken == "" {
+		http.Error(w, "no token", http.StatusForbidden)
+		return
+	}
+	// Compute expected token using terminal password
+	secret := lib.Config.TbankTerminalPassword
+	exp := signToken(secret, mm)
+	if strings.ToLower(recvToken) != strings.ToLower(exp) {
+		http.Error(w, "invalid token", http.StatusForbidden)
+		return
+	}
+	// Decode to typed payload
+	var p TBankWebhook
+	if err := json.Unmarshal(raw, &p); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := c.service.HandleTBankWebhook(context.Background(), p); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (c *Controller) NotifyCloudPayments(w http.ResponseWriter, r *http.Request) {
+	notifType := strings.ToLower(chi.URLParam(r, "type"))
+	if notifType == "" {
+		http.Error(w, "missing type", http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	signature := r.Header.Get("Content-HMAC")
+	if signature == "" {
+		signature = r.Header.Get("X-Content-HMAC")
+	}
+	if signature == "" {
+		http.Error(w, "signature required", http.StatusForbidden)
+		return
+	}
+	if !verifyCloudPaymentsSignature(body, signature) {
+		http.Error(w, "invalid signature", http.StatusForbidden)
+		return
+	}
+
+	headers := make(map[string]string, len(r.Header))
+	for key, vals := range r.Header {
+		if len(vals) == 0 {
+			continue
+		}
+		headers[key] = vals[0]
+	}
+
+	res, err := c.service.HandleCloudPaymentsNotification(context.Background(), notifType, body, headers)
+	if err != nil {
+		logger.Error("cloudpayments notify error", "type", notifType, "err", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 13})
+		return
+	}
+	if res == nil {
+		res = map[string]any{"code": 0}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func verifyCloudPaymentsSignature(body []byte, signature string) bool {
+	signature = strings.TrimSpace(signature)
+	if signature == "" {
+		return false
+	}
+	secret := lib.Config.CloudPaymentsAPISecret
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	if len(expected) != len(signature) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(signature)) == 1
 }
 
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {

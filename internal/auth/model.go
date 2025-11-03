@@ -8,4 +8,5 @@ type LoginData struct {
 type RegisterData struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Locale   string `json:"locale"`
 }

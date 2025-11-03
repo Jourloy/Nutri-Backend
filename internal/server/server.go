@@ -15,6 +15,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/analytics"
 	"github.com/jourloy/nutri-backend/internal/auth"
 	"github.com/jourloy/nutri-backend/internal/body"
+	"github.com/jourloy/nutri-backend/internal/cache"
 	"github.com/jourloy/nutri-backend/internal/database"
 	"github.com/jourloy/nutri-backend/internal/feature"
 	"github.com/jourloy/nutri-backend/internal/feedback"
@@ -26,6 +27,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/subscription"
 	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/template"
+	"github.com/jourloy/nutri-backend/internal/translation"
 	"github.com/jourloy/nutri-backend/internal/user"
 )
 
@@ -45,6 +47,9 @@ func Start() error {
 	database.Connect()
 	logger.Debug("Repositories initialized", "latency", time.Since(tempTime))
 	tempTime = time.Now()
+	if err := cache.Connect(); err != nil {
+		logger.Warn("Redis cache disabled", "error", err)
+	}
 
 	// Middlewares
 	r.Use(cors.Handler(cors.Options{
@@ -74,6 +79,7 @@ func Start() error {
 	ad.NewController().RegisterRoutes(r)
 	body.NewController().RegisterRoutes(r)
 	feedback.NewController().RegisterRoutes(r)
+	translation.NewController().RegisterRoutes(r)
 
 	// Background workers
 	order.StartWorker()

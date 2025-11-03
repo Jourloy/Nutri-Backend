@@ -18,6 +18,7 @@ type Repository interface {
 	DeleteUser(ctx context.Context, id string) (*User, error)
 	UpdateEmail(ctx context.Context, uid string, email string) (*User, error)
 	InvalidateTokens(ctx context.Context, id string) error
+	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
 }
 
 type repository struct {
@@ -31,7 +32,7 @@ func NewRepository() Repository {
 // единый список колонок — не используем SELECT *
 const userColumns = `
     id, username, password_hash,
-    email,
+    email, locale,
     is_accept_terms, is_accept_privacy, is_18, is_admin, 
     token_version, view_updates, view_tutorial,
     logined_at, created_at, updated_at, deleted_at
@@ -39,15 +40,21 @@ const userColumns = `
 
 func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*User, error) {
 	const insertQ = `
-	INSERT INTO users (username, password_hash, view_updates)
-	VALUES (:username, :password_hash, :view_updates)
+	INSERT INTO users (username, password_hash, view_updates, locale)
+	VALUES (:username, :password_hash, :view_updates, :locale)
 	ON CONFLICT (username) DO NOTHING
 	RETURNING ` + userColumns + `;`
+
+	locale := userCreate.Locale
+	if locale == "" {
+		locale = "ru"
+	}
 
 	args := map[string]any{
 		"username":      userCreate.Username,
 		"password_hash": userCreate.PasswordHash,
 		"view_updates":  3,
+		"locale":        locale,
 	}
 
 	// Сначала пытаемся вставить и сразу вернуть строку
@@ -218,6 +225,24 @@ func (r *repository) UpdateEmail(ctx context.Context, uid string, email string) 
 
 	var u User
 	if err := r.db.GetContext(ctx, &u, q, uid, email); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (r *repository) UpdateLocale(ctx context.Context, uid string, locale string) (*User, error) {
+	const q = `
+        UPDATE users
+        SET locale = $2,
+            updated_at = now()
+        WHERE id = $1
+        RETURNING ` + userColumns + `;`
+
+	var u User
+	if err := r.db.GetContext(ctx, &u, q, uid, locale); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
