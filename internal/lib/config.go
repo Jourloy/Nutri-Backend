@@ -13,17 +13,20 @@ type JwtData struct {
 }
 
 type conf struct {
-	DatabaseDSN           string // DSN link for connect with database
-	JWTSecret             string
-	TbankTerminalKey      string
-	TbankTerminalPassword string
-	TelegramToken         string // Optional: used to proxy Telegram avatars
-	MyURL                 string
-	FrontURL              string
-	RedisHost             string
-	RedisPort             string
-	RedisPassword         string
-	RedisDB               int
+	DatabaseDSN            string // DSN link for connect with database
+	JWTSecret              string
+	TbankTerminalKey       string
+	TbankTerminalPassword  string
+	CloudPaymentsPublicID  string
+	CloudPaymentsAPISecret string
+	CloudPaymentsBaseURL   string
+	TelegramToken          string // Optional: used to proxy Telegram avatars
+	MyURL                  string
+	FrontURL               string
+	RedisHost              string
+	RedisPort              string
+	RedisPassword          string
+	RedisDB                int
 }
 
 type contextKeys struct {
@@ -81,6 +84,26 @@ func ParseENV() error {
 	} else {
 		logger.Error("cannot find env TBANK_TERMINAL_PASSWORD")
 		return errors.New("cannot find env TBANK_TERMINAL_PASSWORD")
+	}
+
+	if env, exist := os.LookupEnv("CLOUDPAYMENTS_PUBLIC_ID"); exist {
+		Config.CloudPaymentsPublicID = env
+	} else {
+		logger.Error("cannot find env CLOUDPAYMENTS_PUBLIC_ID")
+		return errors.New("cannot find env CLOUDPAYMENTS_PUBLIC_ID")
+	}
+
+	if env, exist := os.LookupEnv("CLOUDPAYMENTS_API_SECRET"); exist {
+		Config.CloudPaymentsAPISecret = env
+	} else {
+		logger.Error("cannot find env CLOUDPAYMENTS_API_SECRET")
+		return errors.New("cannot find env CLOUDPAYMENTS_API_SECRET")
+	}
+
+	if env, exist := os.LookupEnv("CLOUDPAYMENTS_BASE_URL"); exist {
+		Config.CloudPaymentsBaseURL = env
+	} else {
+		Config.CloudPaymentsBaseURL = "https://api.cloudpayments.ru"
 	}
 
 	if env, exist := os.LookupEnv("MY_URL"); exist {
