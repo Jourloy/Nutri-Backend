@@ -21,7 +21,7 @@ import (
 const (
 	providerTBank         = "tbank"
 	providerCloudPayments = "cloudpayments"
-	taxationSystemUSN     = 2
+	taxationSystemUSN     = 1
 	vatNone               = 0
 )
 
