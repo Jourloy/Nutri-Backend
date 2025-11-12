@@ -38,6 +38,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Delete("/{id}", c.Delete)
 		r.Get("/all", c.GetAll)
 		r.Get("/today", c.GetAllByToday)
+		r.Get("/date", c.GetAllByDate)
 		r.Get("/search", c.Search)
 	})
 
@@ -47,6 +48,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║ DELETE /{id}")
 	logger.Info("║    GET /all")
 	logger.Info("║    GET /today")
+	logger.Info("║    GET /date?date=YYYY-MM-DD")
 	logger.Info("║    GET /search?name=")
 	logger.Info("╚═════")
 }
@@ -108,6 +110,30 @@ func (c *Controller) GetAllByToday(w http.ResponseWriter, r *http.Request) {
 	resp, err := c.service.GetAllByToday(context.Background(), u.Id)
 	if err != nil {
 		logger.Error("Error get all by today", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (c *Controller) GetAllByDate(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	date := r.URL.Query().Get("date")
+	if date == "" {
+		http.Error(w, "date parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := c.service.GetAllByDate(context.Background(), date, u.Id)
+	if err != nil {
+		logger.Error("Error get all by date", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -69,7 +69,7 @@ func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh strin
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refresh,
-		Path:     "/auth/refresh",
+		Path:     "/api/v1/auth/refresh",
 		SameSite: http.SameSiteNoneMode,
 		HttpOnly: true,
 		Secure:   secure,

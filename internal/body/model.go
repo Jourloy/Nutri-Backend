@@ -88,3 +88,15 @@ type PlateauEvent struct {
     Reason           string    `json:"reason" db:"reason"`
     CreatedAt        time.Time `json:"createdAt" db:"created_at"`
 }
+
+type BMIResult struct {
+    CurrentWeight     float64 `json:"currentWeight"`
+    Height            float64 `json:"height"`
+    BMI               float64 `json:"bmi"`
+    BMICategory       string  `json:"bmiCategory"`
+    RecommendedMinKg  float64 `json:"recommendedMinKg"`
+    RecommendedMaxKg  float64 `json:"recommendedMaxKg"`
+    IsHealthy         bool    `json:"isHealthy"`
+    DiffFromMin       float64 `json:"diffFromMin"`
+    DiffFromMax       float64 `json:"diffFromMax"`
+}
