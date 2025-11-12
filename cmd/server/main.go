@@ -15,10 +15,8 @@ func main() {
 
 	// Load .env
 	if err := godotenv.Load(); err != nil {
-		logger.Fatal("Error loading .env file", "error", err)
+		logger.Error("Error loading .env file", "error", err)
 	}
-
-	logger.Debug("ENV loaded")
 
 	// Parse env
 	if err := lib.ParseENV(); err != nil {
