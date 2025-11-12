@@ -47,6 +47,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
         r.Get("/activity", c.GetActivity)
         // plateau history
         r.Get("/plateau/history", c.GetPlateauHistory)
+        // BMI calculation
+        r.Get("/bmi", c.GetBMI)
     })
 
     logger.Info("╔═════ BodyTracking")
@@ -67,6 +69,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
     logger.Info("║ DELETE /activity/{id}")
     logger.Info("║    GET /activity?from=&to=")
     logger.Info("║    GET /plateau/history?from=&to=")
+    logger.Info("║    GET /bmi")
     logger.Info("╚═════")
 }
 
@@ -224,6 +227,14 @@ func (c *Controller) GetPlateauHistory(w http.ResponseWriter, r *http.Request) {
     if s := r.URL.Query().Get("from"); s != "" { if t, err := time.Parse("2006-01-02", s); err == nil { from = &t } }
     if s := r.URL.Query().Get("to"); s != "" { if t, err := time.Parse("2006-01-02", s); err == nil { to = &t } }
     res, err := c.service.GetPlateauHistory(context.Background(), u.Id, from, to)
+    if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+    w.WriteHeader(http.StatusOK); _ = json.NewEncoder(w).Encode(res)
+}
+
+// ===== BMI =====
+func (c *Controller) GetBMI(w http.ResponseWriter, r *http.Request) {
+    u, ok := auth.UserFromContext(r.Context()); if !ok { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+    res, err := c.service.CalculateBMI(context.Background(), u.Id)
     if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
     w.WriteHeader(http.StatusOK); _ = json.NewEncoder(w).Encode(res)
 }

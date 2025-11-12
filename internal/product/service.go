@@ -11,6 +11,7 @@ type Service interface {
 	CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error)
 	GetAll(ctx context.Context, uid string) ([]Product, error)
 	GetAllByToday(ctx context.Context, uid string) ([]Product, error)
+	GetAllByDate(ctx context.Context, date string, uid string) ([]Product, error)
 	GetLikeName(ctx context.Context, name string, uid string) ([]Product, error)
 	UpdateProduct(ctx context.Context, pu Product, uid string) (*Product, error)
 	DeleteProduct(ctx context.Context, id int64, uid string) error
@@ -59,6 +60,15 @@ func (s *service) GetAllByToday(ctx context.Context, uid string) ([]Product, err
 	}
 
 	return s.repo.GetAllByToday(ctx, f.Id, uid)
+}
+
+func (s *service) GetAllByDate(ctx context.Context, date string, uid string) ([]Product, error) {
+	f, err := s.fitService.GetFitProfileByUser(uid)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetAllByDate(ctx, date, f.Id, uid)
 }
 
 func (s *service) GetLikeName(ctx context.Context, name string, uid string) ([]Product, error) {

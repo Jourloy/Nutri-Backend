@@ -27,6 +27,13 @@ type conf struct {
 	RedisPort              string
 	RedisPassword          string
 	RedisDB                int
+	// AI and Storage
+	OpenAIAPIKey    string
+	MinioEndpoint   string
+	MinioAccessKey  string
+	MinioSecretKey  string
+	MinioBucketName string
+	MinioUseSSL     bool
 }
 
 type contextKeys struct {
@@ -158,6 +165,52 @@ func ParseENV() error {
 	} else {
 		logger.Error("cannot find env REDIS_DB")
 		return errors.New("cannot find env REDIS_DB")
+	}
+
+	// AI and Storage configuration
+	if env, exist := os.LookupEnv("OPENAI_API_KEY"); exist {
+		Config.OpenAIAPIKey = env
+	} else {
+		logger.Error("cannot find env OPENAI_API_KEY")
+		return errors.New("cannot find env OPENAI_API_KEY")
+	}
+
+	if env, exist := os.LookupEnv("MINIO_ENDPOINT"); exist {
+		Config.MinioEndpoint = env
+	} else {
+		logger.Error("cannot find env MINIO_ENDPOINT")
+		return errors.New("cannot find env MINIO_ENDPOINT")
+	}
+
+	if env, exist := os.LookupEnv("MINIO_ACCESS_KEY"); exist {
+		Config.MinioAccessKey = env
+	} else {
+		logger.Error("cannot find env MINIO_ACCESS_KEY")
+		return errors.New("cannot find env MINIO_ACCESS_KEY")
+	}
+
+	if env, exist := os.LookupEnv("MINIO_SECRET_KEY"); exist {
+		Config.MinioSecretKey = env
+	} else {
+		logger.Error("cannot find env MINIO_SECRET_KEY")
+		return errors.New("cannot find env MINIO_SECRET_KEY")
+	}
+
+	if env, exist := os.LookupEnv("MINIO_BUCKET_NAME"); exist {
+		Config.MinioBucketName = env
+	} else {
+		Config.MinioBucketName = "nutri-ai-images" // Default bucket name
+	}
+
+	if env, exist := os.LookupEnv("MINIO_USE_SSL"); exist {
+		val, err := strconv.ParseBool(env)
+		if err != nil {
+			logger.Error("cannot parse env MINIO_USE_SSL", "error", err)
+			return errors.New("cannot parse env MINIO_USE_SSL")
+		}
+		Config.MinioUseSSL = val
+	} else {
+		Config.MinioUseSSL = true // Default to true for security
 	}
 
 	return nil

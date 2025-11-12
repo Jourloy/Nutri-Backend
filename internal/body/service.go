@@ -32,6 +32,8 @@ type Service interface {
     GetActivity(ctx context.Context, userId string, from, to *time.Time) ([]Activity, error)
     // plateau history
     GetPlateauHistory(ctx context.Context, userId string, from, to *time.Time) ([]PlateauEvent, error)
+    // BMI calculation
+    CalculateBMI(ctx context.Context, userId string) (*BMIResult, error)
 }
 
 type service struct {
@@ -211,4 +213,63 @@ func (s *service) EvaluatePlateau(ctx context.Context, userId string) (*PlateauR
         Reason: reason,
     }
     return res, nil
+}
+
+// ===== BMI calculation =====
+func (s *service) CalculateBMI(ctx context.Context, userId string) (*BMIResult, error) {
+    // Get latest weight
+    weight, err := s.repo.GetLatestWeight(ctx, userId)
+    if err != nil || weight == nil {
+        return nil, err
+    }
+
+    // Get height from fit profile (in cm)
+    var heightCm float64
+    err = s.db.GetContext(ctx, &heightCm, `SELECT height::float FROM fit_profiles WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1`, userId)
+    if err != nil {
+        return nil, err
+    }
+
+    if heightCm <= 0 {
+        return nil, err
+    }
+
+    // Calculate BMI
+    heightM := heightCm / 100.0
+    bmi := weight.Value / (heightM * heightM)
+
+    // Determine BMI category
+    category := ""
+    isHealthy := false
+    switch {
+    case bmi < 18.5:
+        category = "Недостаточный вес"
+    case bmi >= 18.5 && bmi < 25:
+        category = "Нормальный вес"
+        isHealthy = true
+    case bmi >= 25 && bmi < 30:
+        category = "Избыточный вес"
+    case bmi >= 30:
+        category = "Ожирение"
+    }
+
+    // Calculate recommended weight range (BMI 18.5-24.9)
+    recommendedMinKg := 18.5 * heightM * heightM
+    recommendedMaxKg := 24.9 * heightM * heightM
+
+    // Calculate difference from recommended range
+    diffFromMin := weight.Value - recommendedMinKg
+    diffFromMax := weight.Value - recommendedMaxKg
+
+    return &BMIResult{
+        CurrentWeight:     weight.Value,
+        Height:            heightCm,
+        BMI:               bmi,
+        BMICategory:       category,
+        RecommendedMinKg:  recommendedMinKg,
+        RecommendedMaxKg:  recommendedMaxKg,
+        IsHealthy:         isHealthy,
+        DiffFromMin:       diffFromMin,
+        DiffFromMax:       diffFromMax,
+    }, nil
 }

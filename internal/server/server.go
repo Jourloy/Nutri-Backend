@@ -12,6 +12,7 @@ import (
 
 	"github.com/jourloy/nutri-backend/internal/achievement"
 	"github.com/jourloy/nutri-backend/internal/ad"
+	"github.com/jourloy/nutri-backend/internal/ai"
 	"github.com/jourloy/nutri-backend/internal/analytics"
 	"github.com/jourloy/nutri-backend/internal/auth"
 	"github.com/jourloy/nutri-backend/internal/body"
@@ -63,23 +64,33 @@ func Start() error {
 	r.Use(middlewares.Subscription)
 	r.Use(middleware.Recoverer)
 
-	// Handlers
-	user.NewController().RegisterRoutes(r)
-	auth.NewController().RegisterRoutes(r)
-	fit.NewController().RegisterRoutes(r)
-	product.NewController().RegisterRoutes(r)
-	plan.NewController().RegisterRoutes(r)
-	order.NewController().RegisterRoutes(r)
-	feature.NewController().RegisterRoutes(r)
-	subscription.NewController().RegisterRoutes(r)
-	template.NewController().RegisterRoutes(r)
-	telegram.NewController().RegisterRoutes(r)
-	achievement.NewController().RegisterRoutes(r)
-	analytics.NewController().RegisterRoutes(r)
-	ad.NewController().RegisterRoutes(r)
-	body.NewController().RegisterRoutes(r)
-	feedback.NewController().RegisterRoutes(r)
-	translation.NewController().RegisterRoutes(r)
+	// API v1
+	r.Route("/api/v1", func(r chi.Router) {
+		// Handlers
+		user.NewController().RegisterRoutes(r)
+		auth.NewController().RegisterRoutes(r)
+		fit.NewController().RegisterRoutes(r)
+		product.NewController().RegisterRoutes(r)
+		plan.NewController().RegisterRoutes(r)
+		order.NewController().RegisterRoutes(r)
+		feature.NewController().RegisterRoutes(r)
+		subscription.NewController().RegisterRoutes(r)
+		template.NewController().RegisterRoutes(r)
+		telegram.NewController().RegisterRoutes(r)
+		achievement.NewController().RegisterRoutes(r)
+		analytics.NewController().RegisterRoutes(r)
+		ad.NewController().RegisterRoutes(r)
+		body.NewController().RegisterRoutes(r)
+		feedback.NewController().RegisterRoutes(r)
+		translation.NewController().RegisterRoutes(r)
+
+		// AI controller (may fail if OpenAI/Minio not configured)
+		if aiCtrl, err := ai.NewController(); err != nil {
+			logger.Warn("AI controller disabled", "error", err)
+		} else {
+			aiCtrl.RegisterRoutes(r)
+		}
+	})
 
 	// Background workers
 	order.StartWorker()
