@@ -42,6 +42,9 @@ const (
 	ctxAuthInfoKey contextKey = iota + 1
 )
 
+// AuthContextKey для доступа к Claims из контекста
+const AuthContextKey = ctxAuthInfoKey
+
 func parseRSAPublicKeyFromPEM(pemBytes []byte) (*rsa.PublicKey, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {

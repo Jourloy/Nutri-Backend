@@ -4,6 +4,7 @@ import "context"
 
 type Service interface {
 	GetAllActive(ctx context.Context) ([]Plan, error)
+	GetAllActiveByCurrency(ctx context.Context, currency string) ([]Plan, error)
 	Create(ctx context.Context, pc PlanCreate) (*Plan, error)
 	Update(ctx context.Context, p Plan) (*Plan, error)
 	Delete(ctx context.Context, id int64) error
@@ -19,6 +20,10 @@ func NewService() Service {
 
 func (s *service) GetAllActive(ctx context.Context) ([]Plan, error) {
 	return s.repo.GetAllActive(ctx)
+}
+
+func (s *service) GetAllActiveByCurrency(ctx context.Context, currency string) ([]Plan, error) {
+	return s.repo.GetAllActiveByCurrency(ctx, currency)
 }
 
 func (s *service) Create(ctx context.Context, pc PlanCreate) (*Plan, error) {

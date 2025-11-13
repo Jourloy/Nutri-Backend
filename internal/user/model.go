@@ -11,10 +11,10 @@ type User struct {
 	PasswordHash    string     `json:"-" db:"password_hash"`
 	Email           *string    `json:"email,omitempty" db:"email"`
 	Locale          string     `json:"locale" db:"locale"`
-	IsAcceptTerms   bool       `json:"-" db:"is_accept_terms"`
-	IsAcceptPrivacy bool       `json:"-" db:"is_accept_privacy"`
+	IsAcceptTerms   bool       `json:"isAcceptTerms" db:"is_accept_terms"`
+	IsAcceptPrivacy bool       `json:"IsAcceptPrivacy" db:"is_accept_privacy"`
 	Is18            bool       `json:"-" db:"is_18"`
-	IsAdmin         bool       `json:"-" db:"is_admin"`
+	IsAdmin         bool       `json:"isAdmin" db:"is_admin"`
 	TokenVersion    int64      `json:"-" db:"token_version"`
 	ViewUpdates     int64      `json:"viewUpdates" db:"view_updates"`
 	ViewTutorial    int64      `json:"viewTutorial" db:"view_tutorial"`

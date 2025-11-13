@@ -10,6 +10,7 @@ import (
 
 type Repository interface {
 	GetAllActive(ctx context.Context) ([]Plan, error)
+	GetAllActiveByCurrency(ctx context.Context, currency string) ([]Plan, error)
 	Create(ctx context.Context, pc PlanCreate) (*Plan, error)
 	Update(ctx context.Context, p Plan) (*Plan, error)
 	Delete(ctx context.Context, id int64) error
@@ -34,6 +35,22 @@ func (r *repository) GetAllActive(ctx context.Context) ([]Plan, error) {
 
 	var ps []Plan
 	if err := r.db.SelectContext(ctx, &ps, q); err != nil {
+		return nil, err
+	}
+	return ps, nil
+}
+
+func (r *repository) GetAllActiveByCurrency(ctx context.Context, currency string) ([]Plan, error) {
+	const q = `
+        SELECT id, code, name, plan_type, version, currency,
+               amount_minor, billing_period, trial_days, client_limit,
+               is_active, created_at, updated_at, external_product_id, external_price_id
+        FROM plans
+        WHERE is_active = TRUE AND currency = $1
+        ORDER BY amount_minor ASC`
+
+	var ps []Plan
+	if err := r.db.SelectContext(ctx, &ps, q, currency); err != nil {
 		return nil, err
 	}
 	return ps, nil

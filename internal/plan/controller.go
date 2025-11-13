@@ -47,7 +47,17 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 }
 
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
-	resp, err := c.service.GetAllActive(context.Background())
+	currency := r.URL.Query().Get("currency")
+
+	var resp []Plan
+	var err error
+
+	if currency != "" {
+		resp, err = c.service.GetAllActiveByCurrency(context.Background(), currency)
+	} else {
+		resp, err = c.service.GetAllActive(context.Background())
+	}
+
 	if err != nil {
 		logger.Error("Error get all plans", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)

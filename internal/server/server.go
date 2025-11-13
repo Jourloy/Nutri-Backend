@@ -12,6 +12,7 @@ import (
 
 	"github.com/jourloy/nutri-backend/internal/achievement"
 	"github.com/jourloy/nutri-backend/internal/ad"
+	"github.com/jourloy/nutri-backend/internal/admin"
 	"github.com/jourloy/nutri-backend/internal/ai"
 	"github.com/jourloy/nutri-backend/internal/analytics"
 	"github.com/jourloy/nutri-backend/internal/auth"
@@ -25,9 +26,11 @@ import (
 	"github.com/jourloy/nutri-backend/internal/order"
 	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/product"
+	"github.com/jourloy/nutri-backend/internal/promo"
 	"github.com/jourloy/nutri-backend/internal/subscription"
 	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/template"
+	"github.com/jourloy/nutri-backend/internal/ticket"
 	"github.com/jourloy/nutri-backend/internal/translation"
 	"github.com/jourloy/nutri-backend/internal/user"
 )
@@ -83,6 +86,8 @@ func Start() error {
 		body.NewController().RegisterRoutes(r)
 		feedback.NewController().RegisterRoutes(r)
 		translation.NewController().RegisterRoutes(r)
+		promo.NewController().RegisterRoutes(r)
+		ticket.NewController().RegisterRoutes(r)
 
 		// AI controller (may fail if OpenAI/Minio not configured)
 		if aiCtrl, err := ai.NewController(); err != nil {
@@ -90,6 +95,14 @@ func Start() error {
 		} else {
 			aiCtrl.RegisterRoutes(r)
 		}
+
+		// Admin routes (requires admin middleware)
+		r.Group(func(r chi.Router) {
+			r.Use(middlewares.AdminOnly)
+			admin.NewController().RegisterRoutes(r)
+			promo.NewController().RegisterAdminRoutes(r)
+			ticket.NewController().RegisterAdminRoutes(r)
+		})
 	})
 
 	// Background workers
