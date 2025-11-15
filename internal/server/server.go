@@ -59,10 +59,19 @@ func Start() error {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://nutri.jourloy.com", "http://127.0.0.1"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowedHeaders:   []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
-	r.Use(middleware.StripSlashes) // Убирает trailing slash из URL
+
+	r.Use(middleware.StripSlashes)
+
+	// Debug: логируем путь ПОСЛЕ StripSlashes
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			logger.Debug("AFTER StripSlashes", "path", r.URL.Path)
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
 	r.Use(middlewares.Subscription)
