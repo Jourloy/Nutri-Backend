@@ -96,7 +96,7 @@ func (s *service) Init(ctx context.Context, userId string, planId int64, email s
 	failURL := buildFailRedirect()
 
 	description := fmt.Sprintf("План %s", pl.Code)
-	jsonData := buildCloudPaymentsJsonData(description, email, float64(pl.AmountMinor), pl.Currency)
+	jsonData := buildCloudPaymentsJsonData(description, email, float64(pl.AmountMinor), pl.Currency, pl.BillingPeriod)
 
 	orderReq := CloudPaymentsOrderRequest{
 		Amount:             float64(pl.AmountMinor),
@@ -188,11 +188,17 @@ func buildCloudPaymentsReceipt(description, email string, amount float64, curren
 	return receipt
 }
 
-func buildCloudPaymentsJsonData(description, email string, amount float64, currency string) map[string]any {
+func buildCloudPaymentsJsonData(description, email string, amount float64, currency, billingPeriod string) map[string]any {
 	receipt := buildCloudPaymentsReceipt(description, email, amount, currency)
+	interval, period := cpSchedule(billingPeriod)
+
 	return map[string]any{
 		"cloudPayments": map[string]any{
 			"customerReceipt": receipt,
+			"recurrent": map[string]any{
+				"interval": interval,
+				"period":   period,
+			},
 		},
 	}
 }
