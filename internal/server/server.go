@@ -57,7 +57,7 @@ func Start() error {
 
 	// Middlewares
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"https://*.jourloy.com", "http://127.0.0.1", "http://72.56.69.80"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowedHeaders:   []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 		AllowCredentials: true,
@@ -100,7 +100,6 @@ func Start() error {
 		r.Group(func(r chi.Router) {
 			r.Use(middlewares.AdminOnly)
 			admin.NewController().RegisterRoutes(r)
-			promo.NewController().RegisterAdminRoutes(r)
 			ticket.NewController().RegisterAdminRoutes(r)
 		})
 	})
