@@ -62,16 +62,7 @@ func Start() error {
 		AllowCredentials: true,
 	}))
 
-	r.Use(middleware.StripSlashes)
-
-	// Debug: логируем путь ПОСЛЕ StripSlashes
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger.Debug("AFTER StripSlashes", "path", r.URL.Path)
-			next.ServeHTTP(w, r)
-		})
-	})
-
+	r.Use(middlewares.Slashes)
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
 	r.Use(middlewares.Subscription)
