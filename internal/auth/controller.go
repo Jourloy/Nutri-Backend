@@ -65,7 +65,6 @@ func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh strin
 		SameSite: http.SameSiteNoneMode,
 		HttpOnly: true,
 		Secure:   secure,
-		Domain:   ".jourloy.com",
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
@@ -74,7 +73,6 @@ func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh strin
 		SameSite: http.SameSiteNoneMode,
 		HttpOnly: true,
 		Secure:   secure,
-		Domain:   ".jourloy.com",
 	})
 }
 
