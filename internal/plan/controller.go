@@ -35,7 +35,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/", c.Create)
 		r.Put("/", c.Update)
 		r.Delete("/{id}", c.Delete)
-		r.Get("/all", c.GetAll)
+		r.Get("/all/", c.GetAll)
 	})
 
 	logger.Info("╔═════ Plan")
@@ -47,16 +47,10 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 }
 
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
-	logger.Debug("0")
-
 	currency := r.URL.Query().Get("currency")
-
-	logger.Debug("1")
 
 	var resp []Plan
 	var err error
-
-	logger.Debug("2")
 
 	if currency != "" {
 		resp, err = c.service.GetAllActiveByCurrency(context.Background(), currency)
@@ -64,15 +58,11 @@ func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 		resp, err = c.service.GetAllActive(context.Background())
 	}
 
-	logger.Debug("3")
-
 	if err != nil {
 		logger.Error("Error get all plans", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	logger.Debug("4")
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
