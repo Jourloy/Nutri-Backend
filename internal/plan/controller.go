@@ -35,7 +35,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/", c.Create)
 		r.Put("/", c.Update)
 		r.Delete("/{id}", c.Delete)
-		r.Get("/all/", c.GetAll)
+		r.Get("/all", c.GetAll)
 	})
 
 	logger.Info("╔═════ Plan")

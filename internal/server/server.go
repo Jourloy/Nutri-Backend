@@ -59,6 +59,7 @@ func Start() error {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://nutri.jourloy.com", "http://127.0.0.1"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowedHeaders:   []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
 	r.Use(middlewares.Slashes)
