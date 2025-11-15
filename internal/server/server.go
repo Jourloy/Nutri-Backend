@@ -61,14 +61,13 @@ func Start() error {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowCredentials: true,
 	}))
+	r.Use(middlewares.Slashes)
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
 	r.Use(middlewares.Subscription)
 	r.Use(middleware.Recoverer)
 
-	// API v1
 	r.Route("/api/v1", func(r chi.Router) {
-		// Handlers
 		user.NewController().RegisterRoutes(r)
 		auth.NewController().RegisterRoutes(r)
 		fit.NewController().RegisterRoutes(r)
@@ -88,7 +87,6 @@ func Start() error {
 		promo.NewController().RegisterRoutes(r)
 		ticket.NewController().RegisterRoutes(r)
 
-		// AI controller (may fail if OpenAI/Minio not configured)
 		if aiCtrl, err := ai.NewController(); err != nil {
 			logger.Warn("AI controller disabled", "error", err)
 		} else {
