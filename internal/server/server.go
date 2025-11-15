@@ -62,6 +62,7 @@ func Start() error {
 		AllowedHeaders:   []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
+	r.Use(middleware.StripSlashes) // Убирает trailing slash из URL
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
 	r.Use(middlewares.Subscription)
