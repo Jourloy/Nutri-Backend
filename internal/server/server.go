@@ -61,8 +61,6 @@ func Start() error {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowCredentials: true,
 	}))
-
-	r.Use(middlewares.Slashes)
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
 	r.Use(middlewares.Subscription)
