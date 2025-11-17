@@ -19,6 +19,7 @@ type Repository interface {
 	UpdateEmail(ctx context.Context, uid string, email string) (*User, error)
 	InvalidateTokens(ctx context.Context, id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
+	GetUserStats(ctx context.Context, uid string) (*UserStats, error)
 }
 
 type repository struct {
@@ -249,4 +250,27 @@ func (r *repository) UpdateLocale(ctx context.Context, uid string, locale string
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (r *repository) GetUserStats(ctx context.Context, uid string) (*UserStats, error) {
+	const q = `
+	SELECT
+		COALESCE(EXTRACT(DAY FROM (NOW() - u.created_at))::int, 0) as days_since_registration,
+		COALESCE(COUNT(DISTINCT p.logged_at)::int, 0) as days_with_logs
+	FROM users u
+	LEFT JOIN products p ON p.user_id = u.id
+	WHERE u.id = $1
+	GROUP BY u.created_at;`
+
+	var stats UserStats
+	if err := r.db.QueryRowContext(ctx, q, uid).Scan(
+		&stats.DaysSinceRegistration,
+		&stats.DaysWithLogs,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return &UserStats{DaysSinceRegistration: 0, DaysWithLogs: 0}, nil
+		}
+		return nil, err
+	}
+	return &stats, nil
 }

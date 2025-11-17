@@ -30,3 +30,9 @@ type UserCreate struct {
 	PasswordHash string `db:"password_hash"`
 	Locale       string `db:"locale"`
 }
+
+// UserStats представляет статистику пользователя
+type UserStats struct {
+	DaysSinceRegistration int `json:"daysSinceRegistration"`
+	DaysWithLogs          int `json:"daysWithLogs"`
+}

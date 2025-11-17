@@ -41,6 +41,7 @@ type Service interface {
 	Logout(id string) error
 	Delete(id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*user.User, error)
+	CheckUsernameAvailability(username string) (bool, error)
 }
 
 type service struct {
@@ -151,7 +152,7 @@ func (s *service) Register(body RegisterData) (*LoginResponse, error) {
 	}
 
 	u, err := s.userService.CreateUser(&user.UserCreate{
-		Username:     body.Username,
+		Username:     strings.ToLower(body.Username),
 		PasswordHash: hash,
 		Locale:       locale,
 	})
@@ -168,7 +169,7 @@ func (s *service) Register(body RegisterData) (*LoginResponse, error) {
 }
 
 func (s *service) Login(body LoginData) (*LoginResponse, error) {
-	u, err := s.userService.GetUserByUsername(body.Username)
+	u, err := s.userService.GetUserByUsername(strings.ToLower(body.Username))
 	if err != nil {
 		return nil, err
 	}
@@ -245,4 +246,13 @@ func (s *service) Delete(id string) error {
 
 func (s *service) UpdateLocale(ctx context.Context, uid string, locale string) (*user.User, error) {
 	return s.userService.UpdateLocale(ctx, uid, locale)
+}
+
+func (s *service) CheckUsernameAvailability(username string) (bool, error) {
+	u, err := s.userService.GetUserByUsername(strings.ToLower(username))
+	if err != nil {
+		return false, err
+	}
+	// если пользователь не найден, username доступен
+	return u == nil, nil
 }

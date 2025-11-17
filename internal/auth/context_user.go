@@ -6,15 +6,12 @@ import (
 	"github.com/jourloy/nutri-backend/internal/user"
 )
 
-type ctxUserKeyType int
-
-const ctxUserKey ctxUserKeyType = iota + 1
-
+// ContextWithUser is a wrapper around user.ContextWithUser for backward compatibility
 func ContextWithUser(ctx context.Context, u user.User) context.Context {
-	return context.WithValue(ctx, ctxUserKey, u)
+	return user.ContextWithUser(ctx, u)
 }
 
+// UserFromContext is a wrapper around user.UserFromContext for backward compatibility
 func UserFromContext(ctx context.Context) (user.User, bool) {
-	u, ok := ctx.Value(ctxUserKey).(user.User)
-	return u, ok
+	return user.UserFromContext(ctx)
 }

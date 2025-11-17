@@ -13,6 +13,7 @@ type Service interface {
 	DeleteUser(ctx context.Context, id string) (*User, error)
 	InvalidateTokens(ctx context.Context, id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
+	GetUserStats(ctx context.Context, uid string) (*UserStats, error)
 }
 
 type service struct {
@@ -53,4 +54,8 @@ func (s *service) InvalidateTokens(ctx context.Context, id string) error {
 
 func (s *service) UpdateLocale(ctx context.Context, uid string, locale string) (*User, error) {
 	return s.repo.UpdateLocale(ctx, uid, locale)
+}
+
+func (s *service) GetUserStats(ctx context.Context, uid string) (*UserStats, error) {
+	return s.repo.GetUserStats(ctx, uid)
 }

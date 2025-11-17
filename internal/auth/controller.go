@@ -38,6 +38,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Post("/view/updates", c.IncreaseViewUpdates)
 		r.Patch("/locale", c.UpdateLocale)
 		r.Delete("/me", c.DeleteMe)
+		r.Get("/check-username/{username}", c.CheckUsername)
 	})
 
 	logger.Info("╔═════ Auth")
@@ -49,6 +50,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   POST /view/updates")
 	logger.Info("║   PATCH /locale")
 	logger.Info("║ DELETE /me")
+	logger.Info("║    GET /check-username/{username}")
 	logger.Info("╚═════")
 }
 
@@ -236,4 +238,23 @@ func (c *Controller) UpdateLocale(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(updated)
+}
+
+func (c *Controller) CheckUsername(w http.ResponseWriter, r *http.Request) {
+	username := chi.URLParam(r, "username")
+	if username == "" {
+		http.Error(w, "username is required", http.StatusBadRequest)
+		return
+	}
+
+	available, err := c.service.CheckUsernameAvailability(username)
+	if err != nil {
+		logger.Error("Error checking username", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]bool{"available": available})
 }

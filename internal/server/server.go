@@ -97,6 +97,7 @@ func Start() error {
 		r.Group(func(r chi.Router) {
 			r.Use(middlewares.AdminOnly)
 			admin.NewController().RegisterRoutes(r)
+			promo.NewController().RegisterAdminRoutes(r)
 			ticket.NewController().RegisterAdminRoutes(r)
 		})
 	})
