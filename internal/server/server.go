@@ -23,6 +23,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/feedback"
 	"github.com/jourloy/nutri-backend/internal/fit"
 	"github.com/jourloy/nutri-backend/internal/middlewares"
+	"github.com/jourloy/nutri-backend/internal/news"
 	"github.com/jourloy/nutri-backend/internal/order"
 	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/product"
@@ -86,6 +87,12 @@ func Start() error {
 		translation.NewController().RegisterRoutes(r)
 		promo.NewController().RegisterRoutes(r)
 		ticket.NewController().RegisterRoutes(r)
+
+		if newsCtrl, err := news.NewController(); err != nil {
+			logger.Warn("News controller disabled", "error", err)
+		} else {
+			newsCtrl.RegisterRoutes(r)
+		}
 
 		if aiCtrl, err := ai.NewController(); err != nil {
 			logger.Warn("AI controller disabled", "error", err)

@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -254,23 +255,99 @@ func (r *repository) UpdateLocale(ctx context.Context, uid string, locale string
 
 func (r *repository) GetUserStats(ctx context.Context, uid string) (*UserStats, error) {
 	const q = `
+	WITH user_data AS (
+		SELECT
+			COALESCE(EXTRACT(DAY FROM (NOW() - u.created_at))::int, 0) as days_since_registration,
+			COALESCE(COUNT(DISTINCT p.logged_at)::int, 0) as days_with_logs,
+			COALESCE(COUNT(p.id)::int, 0) as total_products
+		FROM users u
+		LEFT JOIN products p ON p.user_id = u.id
+		WHERE u.id = $1
+		GROUP BY u.created_at
+	),
+	achievements_data AS (
+		SELECT COALESCE(COUNT(*)::int, 0) as unlocked_achievements
+		FROM user_achievements
+		WHERE user_id = $1
+	),
+	streak_data AS (
+		SELECT date_trunc('day', logged_at)::date AS d
+		FROM products
+		WHERE user_id = $1
+		AND logged_at >= CURRENT_DATE - INTERVAL '365 days'
+		GROUP BY date_trunc('day', logged_at)::date
+		ORDER BY d DESC
+	)
 	SELECT
-		COALESCE(EXTRACT(DAY FROM (NOW() - u.created_at))::int, 0) as days_since_registration,
-		COALESCE(COUNT(DISTINCT p.logged_at)::int, 0) as days_with_logs
-	FROM users u
-	LEFT JOIN products p ON p.user_id = u.id
-	WHERE u.id = $1
-	GROUP BY u.created_at;`
+		ud.days_since_registration,
+		ud.days_with_logs,
+		ud.total_products,
+		ad.unlocked_achievements
+	FROM user_data ud
+	CROSS JOIN achievements_data ad;`
 
 	var stats UserStats
 	if err := r.db.QueryRowContext(ctx, q, uid).Scan(
 		&stats.DaysSinceRegistration,
 		&stats.DaysWithLogs,
+		&stats.TotalProducts,
+		&stats.UnlockedAchievements,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return &UserStats{DaysSinceRegistration: 0, DaysWithLogs: 0}, nil
+			return &UserStats{
+				DaysSinceRegistration: 0,
+				DaysWithLogs:          0,
+				CurrentStreak:         0,
+				TotalProducts:         0,
+				UnlockedAchievements:  0,
+			}, nil
 		}
 		return nil, err
 	}
+
+	// Calculate current streak separately (complex logic)
+	stats.CurrentStreak = r.calculateCurrentStreak(ctx, uid)
+
 	return &stats, nil
+}
+
+// calculateCurrentStreak calculates the current consecutive days with at least 1 product
+func (r *repository) calculateCurrentStreak(ctx context.Context, uid string) int {
+	type row struct {
+		D string `db:"d"`
+	}
+	var days []row
+
+	// Get distinct days with products in the last 365 days
+	const q = `
+		SELECT DISTINCT date_trunc('day', logged_at)::date::text AS d
+		FROM products
+		WHERE user_id = $1
+		AND logged_at >= CURRENT_DATE - INTERVAL '365 days'
+		ORDER BY d DESC`
+
+	if err := r.db.SelectContext(ctx, &days, q, uid); err != nil || len(days) == 0 {
+		return 0
+	}
+
+	// Build a map of dates
+	dateMap := make(map[string]bool)
+	for _, d := range days {
+		dateMap[d.D] = true
+	}
+
+	// Count consecutive days from today backwards
+	streak := 0
+	currentDate := time.Now()
+
+	for i := 0; i < 365; i++ {
+		dateStr := currentDate.AddDate(0, 0, -i).Format("2006-01-02")
+		if dateMap[dateStr] {
+			streak++
+		} else {
+			break
+		}
+	}
+
+	return streak
 }

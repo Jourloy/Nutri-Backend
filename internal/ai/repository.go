@@ -114,31 +114,106 @@ func (r *repository) GetUserAnalysisLogs(ctx context.Context, userId string, lim
 // ===== User Limits =====
 
 func (r *repository) GetOrCreateUserLimit(ctx context.Context, userId, requestType string, date time.Time) (*UserLimit, error) {
-	dateStr := date.Format("2006-01-02")
+	// Check if user has active subscription
+	hasActiveSubscription, subscriptionTier := r.checkUserSubscription(ctx, userId)
+
+	// Set limit parameters based on subscription
+	var limitDate time.Time
+	var maxRequests int
+	var tier string
+
+	if hasActiveSubscription {
+		// Premium users: 10 per day
+		limitDate = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+		maxRequests = 10
+		tier = subscriptionTier
+	} else {
+		// Free users: 3 per week (Monday-based)
+		limitDate = getStartOfWeek(date)
+		maxRequests = 3
+		tier = "free"
+	}
+
+	dateStr := limitDate.Format("2006-01-02")
 
 	// Try to get existing
-	existing, err := r.GetUserLimit(ctx, userId, requestType, date)
+	existing, err := r.GetUserLimit(ctx, userId, requestType, limitDate)
 	if err == nil && existing != nil {
 		return existing, nil
 	}
 
-	// Create new with default limit of 10
+	// Create new limit
 	const q = `
-		INSERT INTO ai_user_limits (user_id, limit_date, request_type, requests_count, max_requests)
-		VALUES ($1, $2, $3, 0, 10)
+		INSERT INTO ai_user_limits (user_id, limit_date, request_type, requests_count, max_requests, subscription_tier)
+		VALUES ($1, $2, $3, 0, $4, $5)
 		ON CONFLICT (user_id, limit_date, request_type) DO UPDATE
-		SET updated_at = NOW()
+		SET max_requests = EXCLUDED.max_requests,
+		    subscription_tier = EXCLUDED.subscription_tier,
+		    updated_at = NOW()
 		RETURNING *`
 
 	var limit UserLimit
-	if err := r.db.GetContext(ctx, &limit, q, userId, dateStr, requestType); err != nil {
+	if err := r.db.GetContext(ctx, &limit, q, userId, dateStr, requestType, maxRequests, tier); err != nil {
 		return nil, err
 	}
 	return &limit, nil
 }
 
+// getStartOfWeek returns the Monday of the week for the given date
+func getStartOfWeek(t time.Time) time.Time {
+	// Get the weekday (Sunday = 0, Monday = 1, ...)
+	weekday := int(t.Weekday())
+
+	// Calculate days to subtract to get to Monday
+	// If Sunday (0), subtract 6 days; if Monday (1), subtract 0 days; etc.
+	daysToMonday := (weekday + 6) % 7
+
+	// Subtract days and reset time to midnight
+	monday := t.AddDate(0, 0, -daysToMonday)
+	return time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, monday.Location())
+}
+
+// checkUserSubscription checks if user has active subscription
+func (r *repository) checkUserSubscription(ctx context.Context, userId string) (bool, string) {
+	const q = `
+		SELECT status, period_end
+		FROM subscriptions
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT 1`
+
+	var status string
+	var periodEnd time.Time
+
+	err := r.db.QueryRowContext(ctx, q, userId).Scan(&status, &periodEnd)
+	if err != nil {
+		// No subscription found
+		return false, "free"
+	}
+
+	// Check if subscription is active and not expired
+	if status == "active" && periodEnd.After(time.Now()) {
+		return true, "premium"
+	}
+
+	return false, "free"
+}
+
 func (r *repository) IncrementUserLimit(ctx context.Context, userId, requestType string, date time.Time) error {
-	dateStr := date.Format("2006-01-02")
+	// Check subscription to determine limit type
+	hasActiveSubscription, _ := r.checkUserSubscription(ctx, userId)
+
+	var limitDate time.Time
+	if hasActiveSubscription {
+		// Premium users: daily limit
+		limitDate = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	} else {
+		// Free users: weekly limit (Monday-based)
+		limitDate = getStartOfWeek(date)
+	}
+
+	dateStr := limitDate.Format("2006-01-02")
+
 	const q = `
 		UPDATE ai_user_limits
 		SET requests_count = requests_count + 1, updated_at = NOW()
@@ -149,7 +224,20 @@ func (r *repository) IncrementUserLimit(ctx context.Context, userId, requestType
 }
 
 func (r *repository) GetUserLimit(ctx context.Context, userId, requestType string, date time.Time) (*UserLimit, error) {
-	dateStr := date.Format("2006-01-02")
+	// Check subscription to determine limit type
+	hasActiveSubscription, _ := r.checkUserSubscription(ctx, userId)
+
+	var limitDate time.Time
+	if hasActiveSubscription {
+		// Premium users: daily limit
+		limitDate = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	} else {
+		// Free users: weekly limit (Monday-based)
+		limitDate = getStartOfWeek(date)
+	}
+
+	dateStr := limitDate.Format("2006-01-02")
+
 	const q = `
 		SELECT * FROM ai_user_limits
 		WHERE user_id = $1 AND limit_date = $2 AND request_type = $3`

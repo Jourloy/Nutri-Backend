@@ -24,6 +24,7 @@ import (
 
 type Service interface {
 	AnalyzeFoodImage(ctx context.Context, userId string, imageData []byte, totalWeight float64, userPrompt string, language string) (*FoodAnalysisResult, error)
+	AnalyzeFoodByText(ctx context.Context, userId string, foodName string, foodDescription string, totalWeight float64, language string) (*FoodAnalysisResult, error)
 	CheckUserLimit(ctx context.Context, userId, requestType string) (*LimitCheckResult, error)
 	GetUserAnalysisHistory(ctx context.Context, userId string, limit int) ([]AnalysisLog, error)
 }
@@ -210,6 +211,106 @@ func (s *service) AnalyzeFoodImage(ctx context.Context, userId string, imageData
 	return result, nil
 }
 
+// AnalyzeFoodByText performs AI analysis based on text description without image
+func (s *service) AnalyzeFoodByText(ctx context.Context, userId string, foodName string, foodDescription string, totalWeight float64, language string) (*FoodAnalysisResult, error) {
+	startTime := time.Now()
+	requestType := "food_analysis" // Same request type as image analysis
+
+	// Default to English if language not specified
+	if language == "" {
+		language = "en"
+	}
+
+	// 1. Check if user is banned
+	banUntil, err := s.repo.GetUserBanStatus(ctx, userId)
+	if err != nil {
+		s.logger.Error("failed to check ban status", "userId", userId, "error", err)
+	}
+	if banUntil != nil && banUntil.After(time.Now()) {
+		return nil, fmt.Errorf("user is banned until %s", banUntil.Format("2006-01-02 15:04:05"))
+	}
+
+	// 2. Check usage limits
+	limitResult, err := s.CheckUserLimit(ctx, userId, requestType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check user limit: %w", err)
+	}
+	if !limitResult.Allowed {
+		return nil, fmt.Errorf("weekly limit exceeded: %s", limitResult.Message)
+	}
+
+	// 3. Create initial analysis log
+	userPrompt := fmt.Sprintf("Food: %s. %s", foodName, foodDescription)
+	analysisLog := AnalysisLog{
+		UserId:      userId,
+		RequestType: requestType,
+		UserPrompt:  userPrompt,
+		TotalWeight: &totalWeight,
+		ModelUsed:   "gpt-4o",
+		Status:      "pending",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	createdLog, err := s.repo.CreateAnalysisLog(ctx, analysisLog)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create analysis log: %w", err)
+	}
+
+	// 4. Call OpenAI Text API (without image)
+	response, err := s.callOpenAIText(ctx, foodName, foodDescription, totalWeight, language)
+	if err != nil {
+		s.updateLogWithError(ctx, createdLog.Id, "openai api error", err)
+		return nil, fmt.Errorf("openai api error: %w", err)
+	}
+
+	// 5. Parse response
+	result, err := s.parseOpenAIResponse(response, totalWeight)
+	if err != nil {
+		s.updateLogWithError(ctx, createdLog.Id, "failed to parse response", err)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// 6. Calculate costs
+	tokensPrompt := response.Usage.PromptTokens
+	tokensCompletion := response.Usage.CompletionTokens
+	estimatedCost := s.calculateCost(tokensPrompt, tokensCompletion)
+
+	// 7. Update analysis log with success
+	responseDataJSON, _ := json.Marshal(response)
+	responseDataStr := string(responseDataJSON)
+	parsedResultJSON, _ := json.Marshal(result)
+	parsedResultStr := string(parsedResultJSON)
+
+	processingTime := int(time.Since(startTime).Milliseconds())
+
+	err = s.repo.UpdateAnalysisLog(ctx, AnalysisLog{
+		Id:               createdLog.Id,
+		ResponseData:     &responseDataStr,
+		ParsedResult:     &parsedResultStr,
+		TokensPrompt:     &tokensPrompt,
+		TokensCompletion: &tokensCompletion,
+		EstimatedCostUsd: &estimatedCost,
+		Status:           "success",
+		ProcessingTimeMs: &processingTime,
+		UpdatedAt:        time.Now(),
+	})
+	if err != nil {
+		s.logger.Error("failed to update analysis log", "logId", createdLog.Id, "error", err)
+	}
+
+	// 8. Increment user limit
+	today := time.Now()
+	err = s.repo.IncrementUserLimit(ctx, userId, requestType, today)
+	if err != nil {
+		s.logger.Error("failed to increment user limit", "userId", userId, "error", err)
+	}
+
+	s.logger.Info("food text analysis completed", "userId", userId, "logId", createdLog.Id, "cost", estimatedCost, "time_ms", processingTime)
+
+	return result, nil
+}
+
 // CheckUserLimit verifies if user can make another request
 func (s *service) CheckUserLimit(ctx context.Context, userId, requestType string) (*LimitCheckResult, error) {
 	today := time.Now()
@@ -221,11 +322,30 @@ func (s *service) CheckUserLimit(ctx context.Context, userId, requestType string
 	}
 
 	allowed := limit.RequestsCount < limit.MaxRequests
-	resetAt := today.Add(24 * time.Hour).Format("2006-01-02")
+
+	// Calculate reset date based on subscription tier
+	var resetAt string
+	if limit.SubscriptionTier != nil && *limit.SubscriptionTier != "free" {
+		// Premium users: resets tomorrow (daily limit)
+		tomorrow := today.AddDate(0, 0, 1)
+		resetAt = tomorrow.Format("2006-01-02")
+	} else {
+		// Free users: resets next Monday (weekly limit)
+		daysUntilMonday := (8 - int(today.Weekday())) % 7
+		if daysUntilMonday == 0 {
+			daysUntilMonday = 7
+		}
+		nextMonday := today.AddDate(0, 0, daysUntilMonday)
+		resetAt = nextMonday.Format("2006-01-02")
+	}
 
 	message := ""
 	if !allowed {
-		message = fmt.Sprintf("Daily limit of %d requests reached. Resets at %s", limit.MaxRequests, resetAt)
+		if limit.SubscriptionTier != nil && *limit.SubscriptionTier != "free" {
+			message = fmt.Sprintf("Daily limit of %d requests reached. Resets at %s", limit.MaxRequests, resetAt)
+		} else {
+			message = fmt.Sprintf("Weekly limit of %d requests reached. Resets at %s", limit.MaxRequests, resetAt)
+		}
 	}
 
 	return &LimitCheckResult{
@@ -350,6 +470,70 @@ Response format (JSON):
 							},
 						},
 					},
+				},
+			},
+			MaxTokens:   500,
+			Temperature: 0.3,
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// callOpenAIText calls OpenAI API for text-based food analysis
+func (s *service) callOpenAIText(ctx context.Context, foodName, foodDescription string, totalWeight float64, language string) (*openai.ChatCompletionResponse, error) {
+	// Language-specific instructions
+	languageInstructions := map[string]string{
+		"ru": "Отвечай на русском языке. Все поля JSON должны содержать русский текст.",
+		"en": "Respond in English. All JSON fields should contain English text.",
+		"es": "Responde en español. Todos los campos JSON deben contener texto en español.",
+		"de": "Antworte auf Deutsch. Alle JSON-Felder sollten deutschen Text enthalten.",
+		"fr": "Répondez en français. Tous les champs JSON doivent contenir du texte en français.",
+	}
+
+	langInstruction := languageInstructions[language]
+	if langInstruction == "" {
+		langInstruction = languageInstructions["en"]
+	}
+
+	systemPrompt := fmt.Sprintf(`You are a nutrition analysis assistant. %s
+
+Analyze the food based on its name and description, and provide detailed nutritional information.
+Provide accurate nutritional values per 100g AND for the total weight specified by the user.
+
+Response format (JSON):
+{
+  "productName": "Name of the food item",
+  "confidence": 0.0-1.0,
+  "explanation": "Brief explanation about the nutritional analysis",
+  "basicCalories": calories per 100g,
+  "basicProtein": protein per 100g,
+  "basicFat": fat per 100g,
+  "basicCarbs": carbs per 100g,
+  "calories": total calories for specified weight,
+  "protein": total protein for specified weight,
+  "fat": total fat for specified weight,
+  "carbs": total carbs for specified weight
+}`, langInstruction)
+
+	userMessage := fmt.Sprintf("Food name: %s\nDescription: %s\nTotal weight: %.1fg\n\nProvide nutritional information for this food.", foodName, foodDescription, totalWeight)
+
+	resp, err := s.openaiClient.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4o,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleSystem,
+					Content: systemPrompt,
+				},
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: userMessage,
 				},
 			},
 			MaxTokens:   500,

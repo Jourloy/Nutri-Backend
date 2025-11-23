@@ -42,6 +42,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/ai", func(r chi.Router) {
 		// Food analysis
 		r.Post("/analyze-food", c.AnalyzeFoodImage)
+		r.Post("/analyze-food-text", c.AnalyzeFoodByText)
 		r.Get("/analysis-history", c.GetAnalysisHistory)
 		r.Get("/analysis/{id}", c.GetAnalysisById)
 
@@ -51,6 +52,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 
 	logger.Info("╔═════ AI")
 	logger.Info("║   POST /analyze-food (multipart: image, totalWeight, userPrompt)")
+	logger.Info("║   POST /analyze-food-text (json: foodName, foodDescription, totalWeight, language)")
 	logger.Info("║    GET /analysis-history?limit=10")
 	logger.Info("║    GET /analysis/{id}")
 	logger.Info("║    GET /limit-status?type=food_analysis")
@@ -115,6 +117,62 @@ func (c *Controller) AnalyzeFoodImage(w http.ResponseWriter, r *http.Request) {
 	result, err := c.service.AnalyzeFoodImage(context.Background(), u.Id, imageData, totalWeight, userPrompt, language)
 	if err != nil {
 		logger.Error("food analysis failed", "userId", u.Id, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+// AnalyzeFoodByText handles food text analysis requests
+func (c *Controller) AnalyzeFoodByText(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse JSON body
+	var req struct {
+		FoodName        string  `json:"foodName"`
+		FoodDescription string  `json:"foodDescription"`
+		TotalWeight     float64 `json:"totalWeight"`
+		Language        string  `json:"language"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.FoodName == "" {
+		http.Error(w, "foodName is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.TotalWeight <= 0 {
+		http.Error(w, "totalWeight must be greater than 0", http.StatusBadRequest)
+		return
+	}
+
+	// Default language
+	if req.Language == "" {
+		req.Language = "en"
+	}
+
+	// Call service
+	result, err := c.service.AnalyzeFoodByText(
+		context.Background(),
+		u.Id,
+		req.FoodName,
+		req.FoodDescription,
+		req.TotalWeight,
+		req.Language,
+	)
+	if err != nil {
+		logger.Error("food text analysis failed", "userId", u.Id, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

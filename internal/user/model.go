@@ -35,4 +35,7 @@ type UserCreate struct {
 type UserStats struct {
 	DaysSinceRegistration int `json:"daysSinceRegistration"`
 	DaysWithLogs          int `json:"daysWithLogs"`
+	CurrentStreak         int `json:"currentStreak"`
+	TotalProducts         int `json:"totalProducts"`
+	UnlockedAchievements  int `json:"unlockedAchievements"`
 }

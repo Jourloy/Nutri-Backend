@@ -54,8 +54,8 @@ func (r *repository) GetDashboardStats(ctx context.Context) (*DashboardStats, er
 		return nil, err
 	}
 
-	// Активные пользователи (заходили за последние 30 дней)
-	const activeUsersQ = `SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND logined_at > NOW() - INTERVAL '30 days'`
+	// Активные пользователи (заходили за последние 3 дней)
+	const activeUsersQ = `SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND logined_at > NOW() - INTERVAL '3 days'`
 	if err := r.db.GetContext(ctx, &stats.ActiveUsers, activeUsersQ); err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (r *repository) GetDashboardStats(ctx context.Context) (*DashboardStats, er
 		FROM users u
 		LEFT JOIN subscriptions s ON u.id = s.user_id AND s.status IN ('active', 'trialing')
 		LEFT JOIN plans p ON s.plan_id = p.id
-		WHERE u.deleted_at IS NULL AND (p.code = 'FREE' OR p.code IS NULL)
+		WHERE u.deleted_at IS NULL AND (p.code = 'START' OR p.code IS NULL)
 	`
 	if err := r.db.GetContext(ctx, &stats.FreeUsers, freeUsersQ); err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (r *repository) GetDashboardStats(ctx context.Context) (*DashboardStats, er
 		FROM users u
 		JOIN subscriptions s ON u.id = s.user_id AND s.status IN ('active', 'trialing')
 		JOIN plans p ON s.plan_id = p.id
-		WHERE u.deleted_at IS NULL AND p.code != 'FREE'
+		WHERE u.deleted_at IS NULL AND p.code != 'START'
 	`
 	if err := r.db.GetContext(ctx, &stats.PremiumUsers, premiumUsersQ); err != nil {
 		return nil, err
@@ -88,7 +88,8 @@ func (r *repository) GetDashboardStats(ctx context.Context) (*DashboardStats, er
 	const monthlyRevenueQ = `
 		SELECT COALESCE(SUM(s.amount_minor), 0)
 		FROM subscriptions s
-		WHERE s.status IN ('active', 'trialing') AND s.billing_period = 'month'
+		JOIN plans p ON s.plan_id = p.id
+		WHERE s.status IN ('active', 'trialing') AND s.billing_period = 'month' AND p.code != 'START'
 	`
 	if err := r.db.GetContext(ctx, &stats.MonthlyRevenue, monthlyRevenueQ); err != nil {
 		return nil, err
@@ -266,13 +267,13 @@ func (r *repository) CreateNotification(ctx context.Context, createdBy string, n
 		RETURNING ` + notificationColumns
 
 	args := map[string]interface{}{
-		"title":            notification.Title,
-		"message":          notification.Message,
-		"target_audience":  notification.TargetAudience,
-		"target_plan_id":   notification.TargetPlanId,
-		"target_user_ids":  pq.Array(notification.TargetUserIds),
-		"scheduled_at":     notification.ScheduledAt,
-		"created_by":       createdBy,
+		"title":           notification.Title,
+		"message":         notification.Message,
+		"target_audience": notification.TargetAudience,
+		"target_plan_id":  notification.TargetPlanId,
+		"target_user_ids": pq.Array(notification.TargetUserIds),
+		"scheduled_at":    notification.ScheduledAt,
+		"created_by":      createdBy,
 	}
 
 	rows, err := r.db.NamedQueryContext(ctx, q, args)
