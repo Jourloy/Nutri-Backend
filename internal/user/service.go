@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+
+	"github.com/jourloy/nutri-backend/internal/email"
 )
 
 type Service interface {
@@ -14,14 +16,21 @@ type Service interface {
 	InvalidateTokens(ctx context.Context, id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
 	GetUserStats(ctx context.Context, uid string) (*UserStats, error)
+	RequestEmailVerification(ctx context.Context, uid string, email string) error
+	VerifyEmail(ctx context.Context, uid string, code string) (*User, error)
+	ResendVerificationCode(ctx context.Context, uid string) error
 }
 
 type service struct {
-	repo Repository
+	repo         Repository
+	emailService email.Service
 }
 
 func NewService() Service {
-	return &service{repo: NewRepository()}
+	return &service{
+		repo:         NewRepository(),
+		emailService: email.NewService(),
+	}
 }
 
 func (s *service) CreateUser(userCreate *UserCreate) (*User, error) {
@@ -58,4 +67,25 @@ func (s *service) UpdateLocale(ctx context.Context, uid string, locale string) (
 
 func (s *service) GetUserStats(ctx context.Context, uid string) (*UserStats, error) {
 	return s.repo.GetUserStats(ctx, uid)
+}
+
+func (s *service) RequestEmailVerification(ctx context.Context, uid string, email string) error {
+	// Отправляем код верификации через email service
+	return s.emailService.SendVerificationCode(ctx, uid, email)
+}
+
+func (s *service) VerifyEmail(ctx context.Context, uid string, code string) (*User, error) {
+	// Проверяем код через email service
+	verifiedCode, err := s.emailService.VerifyCode(ctx, uid, code)
+	if err != nil {
+		return nil, err
+	}
+
+	// Обновляем user - устанавливаем email и email_verified = true
+	return s.repo.SetEmailVerified(ctx, uid, verifiedCode.Email)
+}
+
+func (s *service) ResendVerificationCode(ctx context.Context, uid string) error {
+	// Повторно отправляем код через email service
+	return s.emailService.ResendVerificationCode(ctx, uid)
 }

@@ -10,6 +10,7 @@ type User struct {
 	Username        string     `json:"username" db:"username"`
 	PasswordHash    string     `json:"-" db:"password_hash"`
 	Email           *string    `json:"email,omitempty" db:"email"`
+	EmailVerified   bool       `json:"emailVerified" db:"email_verified"`
 	Locale          string     `json:"locale" db:"locale"`
 	IsAcceptTerms   bool       `json:"isAcceptTerms" db:"is_accept_terms"`
 	IsAcceptPrivacy bool       `json:"IsAcceptPrivacy" db:"is_accept_privacy"`
