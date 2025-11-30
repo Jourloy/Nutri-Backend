@@ -89,22 +89,30 @@ func (c *Controller) AnalyzeFoodImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get total weight
+	// Get total weight (optional - AI will estimate if not provided)
+	var totalWeight *float64
 	totalWeightStr := r.FormValue("totalWeight")
-	if totalWeightStr == "" {
-		http.Error(w, "totalWeight is required", http.StatusBadRequest)
-		return
-	}
-	totalWeight, err := strconv.ParseFloat(totalWeightStr, 64)
-	if err != nil {
-		http.Error(w, "invalid totalWeight", http.StatusBadRequest)
-		return
+	if totalWeightStr != "" {
+		weight, err := strconv.ParseFloat(totalWeightStr, 64)
+		if err != nil {
+			http.Error(w, "invalid totalWeight", http.StatusBadRequest)
+			return
+		}
+		if weight <= 0 {
+			http.Error(w, "totalWeight must be greater than 0", http.StatusBadRequest)
+			return
+		}
+		totalWeight = &weight
 	}
 
 	// Get user prompt (optional)
 	userPrompt := r.FormValue("userPrompt")
 	if userPrompt == "" {
-		userPrompt = "Please analyze this food image and provide nutritional information"
+		if totalWeight == nil {
+			userPrompt = "Please analyze this food image, identify the food, estimate the portion size/weight, and provide nutritional information"
+		} else {
+			userPrompt = "Please analyze this food image and provide nutritional information"
+		}
 	}
 
 	// Get language (optional, defaults to "en")

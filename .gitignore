@@ -16,7 +16,7 @@ bin/
 *.out
 
 # Compiled binary
-server
+/server
 
 # IDE
 .vscode/

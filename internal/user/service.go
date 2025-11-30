@@ -10,6 +10,7 @@ type Service interface {
 	CreateUser(user *UserCreate) (*User, error)
 	GetUser(id string) (*User, error)
 	GetUserByUsername(username string) (*User, error)
+	GetUserLocale(ctx context.Context, uid string) (string, error)
 	IncreaseViewUpdates(ctx context.Context, uid string) (*User, error)
 	UpdateLogin(ctx context.Context, uid string) error
 	DeleteUser(ctx context.Context, id string) (*User, error)
@@ -27,10 +28,13 @@ type service struct {
 }
 
 func NewService() Service {
-	return &service{
+	s := &service{
 		repo:         NewRepository(),
 		emailService: email.NewService(),
 	}
+	// Устанавливаем locale getter для email service
+	s.emailService.SetUserLocaleGetter(s)
+	return s
 }
 
 func (s *service) CreateUser(userCreate *UserCreate) (*User, error) {
@@ -43,6 +47,14 @@ func (s *service) GetUser(id string) (*User, error) {
 
 func (s *service) GetUserByUsername(username string) (*User, error) {
 	return s.repo.GetUserByUsername(context.Background(), username)
+}
+
+func (s *service) GetUserLocale(ctx context.Context, uid string) (string, error) {
+	user, err := s.repo.GetUser(ctx, uid)
+	if err != nil {
+		return "", err
+	}
+	return user.Locale, nil
 }
 
 func (s *service) IncreaseViewUpdates(ctx context.Context, uid string) (*User, error) {

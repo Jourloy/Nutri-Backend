@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"math/big"
 	"os"
 	"time"
@@ -19,14 +18,22 @@ var (
 	ErrEmailConfigMissing = errors.New("mailgun configuration missing")
 )
 
+// UserLocaleGetter интерфейс для получения локали пользователя
+type UserLocaleGetter interface {
+	GetUserLocale(ctx context.Context, userId string) (string, error)
+}
+
 type Service interface {
 	SendVerificationCode(ctx context.Context, userId string, email string) error
 	VerifyCode(ctx context.Context, userId string, code string) (*VerificationCode, error)
 	ResendVerificationCode(ctx context.Context, userId string) error
+	SetUserLocaleGetter(getter UserLocaleGetter)
 }
 
 type service struct {
 	repo             Repository
+	templates        *EmailTemplates
+	userLocaleGetter UserLocaleGetter
 	mailgunDomain    string
 	mailgunAPIKey    string
 	mailgunFromEmail string
@@ -35,10 +42,16 @@ type service struct {
 func NewService() Service {
 	return &service{
 		repo:             NewRepository(),
+		templates:        NewEmailTemplates(),
 		mailgunDomain:    os.Getenv("MAILGUN_DOMAIN"),
 		mailgunAPIKey:    os.Getenv("MAILGUN_API_KEY"),
 		mailgunFromEmail: os.Getenv("MAILGUN_FROM_EMAIL"),
 	}
+}
+
+// SetUserLocaleGetter устанавливает getter для получения локали пользователя
+func (s *service) SetUserLocaleGetter(getter UserLocaleGetter) {
+	s.userLocaleGetter = getter
 }
 
 // generateVerificationCode генерирует 6-значный код
@@ -101,20 +114,17 @@ func (s *service) SendVerificationCode(ctx context.Context, userId string, email
 		return err
 	}
 
-	// Отправляем email
-	subject := "Код подтверждения email - Nutri"
-	body := fmt.Sprintf(`Здравствуйте!
+	// Получаем локаль пользователя
+	locale := "ru" // Default locale
+	if s.userLocaleGetter != nil {
+		userLocale, err := s.userLocaleGetter.GetUserLocale(ctx, userId)
+		if err == nil && userLocale != "" {
+			locale = userLocale
+		}
+	}
 
-Ваш код подтверждения для привязки email к аккаунту Nutri:
-
-%s
-
-Код действителен 15 минут.
-
-Если вы не запрашивали этот код, проигнорируйте это письмо.
-
-С уважением,
-Команда Nutri`, code)
+	// Получаем локализованный шаблон
+	subject, body := s.templates.GetVerificationCodeTemplate(locale, code)
 
 	return s.sendEmailViaMailgun(email, subject, body)
 }
