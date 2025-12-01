@@ -18,6 +18,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/auth"
 	"github.com/jourloy/nutri-backend/internal/body"
 	"github.com/jourloy/nutri-backend/internal/cache"
+	"github.com/jourloy/nutri-backend/internal/consent"
 	"github.com/jourloy/nutri-backend/internal/database"
 	"github.com/jourloy/nutri-backend/internal/feature"
 	"github.com/jourloy/nutri-backend/internal/feedback"
@@ -85,6 +86,7 @@ func Start() error {
 		body.NewController().RegisterRoutes(r)
 		feedback.NewController().RegisterRoutes(r)
 		translation.NewController().RegisterRoutes(r)
+		consent.NewController().RegisterRoutes(r)
 		promo.NewController().RegisterRoutes(r)
 		ticket.NewController().RegisterRoutes(r)
 

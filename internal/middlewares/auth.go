@@ -112,7 +112,7 @@ func clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
-		Path:     "/auth/refresh", // тот же Path, что при установке!
+		Path:     "/api/v1/auth/refresh", // тот же Path, что при установке!
 		HttpOnly: true,
 		SameSite: samesite,
 		Secure:   secure,

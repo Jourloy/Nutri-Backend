@@ -54,7 +54,7 @@ func (s *service) GetUserLocale(ctx context.Context, uid string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	return user.Locale, nil
+	return *user.Locale, nil
 }
 
 func (s *service) IncreaseViewUpdates(ctx context.Context, uid string) (*User, error) {

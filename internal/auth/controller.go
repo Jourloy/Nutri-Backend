@@ -197,7 +197,7 @@ func (c *Controller) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	err := c.service.Delete(u.Id)
 	if err != nil {
 		logger.Warn("delete failed", "err", err)
-		http.Error(w, "invalid or expired refresh token", http.StatusUnauthorized)
+		http.Error(w, "failed to delete user", http.StatusInternalServerError)
 		return
 	}
 
