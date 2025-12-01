@@ -299,14 +299,14 @@ func (s *service) CalculateBMI(ctx context.Context, userId string) (*BMIResult, 
 	isHealthy := false
 	switch {
 	case bmi < 18.5:
-		category = "Недостаточный вес"
+		category = "bodyTracking.bmi.category.underweight"
 	case bmi >= 18.5 && bmi < 25:
-		category = "Нормальный вес"
+		category = "bodyTracking.bmi.category.normal"
 		isHealthy = true
 	case bmi >= 25 && bmi < 30:
-		category = "Избыточный вес"
+		category = "bodyTracking.bmi.category.overweight"
 	case bmi >= 30:
-		category = "Ожирение"
+		category = "bodyTracking.bmi.category.obese"
 	}
 
 	// Calculate recommended weight range (BMI 18.5-24.9)
