@@ -176,6 +176,8 @@ func (r *repository) DeleteUser(ctx context.Context, id string) (*User, error) {
 		{query: `DELETE FROM ai_user_limits WHERE user_id = $1`, args: []any{id}},
 		{query: `DELETE FROM ticket_messages WHERE user_id = $1`, args: []any{id}},
 		{query: `DELETE FROM ai_analysis_logs WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM ai_violations WHERE user_id = $1`, args: []any{id}},
+		{query: `DELETE FROM consent_records WHERE user_id = $1`, args: []any{id}},
 	}
 
 	for _, d := range deletions {
