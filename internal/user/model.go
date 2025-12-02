@@ -27,9 +27,9 @@ type User struct {
 
 // UserCreate представляет структуру для создания пользователя
 type UserCreate struct {
-	Username     string `db:"username"`
-	PasswordHash string `db:"password_hash"`
-	Locale       string `db:"locale"`
+	Username     string  `db:"username"`
+	PasswordHash string  `db:"password_hash"`
+	Locale       *string `db:"locale"`
 }
 
 // UserStats представляет статистику пользователя

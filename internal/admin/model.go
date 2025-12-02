@@ -45,7 +45,7 @@ type UserListItem struct {
 	Id           string     `json:"id" db:"id"`
 	Username     string     `json:"username" db:"username"`
 	Email        *string    `json:"email,omitempty" db:"email"`
-	Locale       string     `json:"locale" db:"locale"`
+	Locale       *string    `json:"locale" db:"locale"`
 	PlanCode     *string    `json:"plan_code,omitempty" db:"plan_code"`
 	PlanName     *string    `json:"plan_name,omitempty" db:"plan_name"`
 	SubStatus    *string    `json:"sub_status,omitempty" db:"sub_status"`
