@@ -49,9 +49,6 @@ func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*U
 	RETURNING ` + userColumns + `;`
 
 	locale := userCreate.Locale
-	if locale == "" {
-		locale = "ru"
-	}
 
 	args := map[string]any{
 		"username":      userCreate.Username,

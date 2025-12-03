@@ -154,7 +154,7 @@ func (s *service) Register(body RegisterData) (*LoginResponse, error) {
 	u, err := s.userService.CreateUser(&user.UserCreate{
 		Username:     strings.ToLower(body.Username),
 		PasswordHash: hash,
-		Locale:       locale,
+		Locale:       &locale,
 	})
 	if err != nil {
 		return nil, err
