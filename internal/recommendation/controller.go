@@ -1,0 +1,55 @@
+package recommendation
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"os"
+
+	"github.com/charmbracelet/log"
+	"github.com/go-chi/chi/v5"
+	"github.com/jourloy/nutri-backend/internal/auth"
+)
+
+var (
+	logger = log.NewWithOptions(os.Stderr, log.Options{
+		Prefix: "[recom]",
+		Level:  log.DebugLevel,
+	})
+)
+
+type Controller struct {
+	service Service
+}
+
+func NewController() *Controller {
+	return &Controller{service: NewService()}
+}
+
+func (c *Controller) RegisterRoutes(router chi.Router) {
+	router.Route("/recommendations", func(r chi.Router) {
+		r.Get("/today", c.GetDailyRecommendations)
+	})
+
+	logger.Info("╔═════ Recommendations")
+	logger.Info("║    GET /today")
+	logger.Info("╚═════")
+}
+
+func (c *Controller) GetDailyRecommendations(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	resp, err := c.service.GetDailyRecommendations(context.Background(), u.Id)
+	if err != nil {
+		logger.Error("Error getting recommendations", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}

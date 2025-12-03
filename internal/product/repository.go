@@ -35,16 +35,16 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) (*Prod
 	INSERT INTO products (
 		name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, logged_at, user_id, fit_id
+		is_water, meal_type, logged_at, user_id, fit_id
 	) VALUES (
 		:name, :amount, :unit, :calories, :protein, :fat, :carbs,
 		:basic_calories, :basic_protein, :basic_fat, :basic_carbs,
-		:is_water, COALESCE(:logged_at, CURRENT_DATE), :user_id, :fit_id
+		:is_water, :meal_type, COALESCE(:logged_at, CURRENT_DATE), :user_id, :fit_id
 	)
 	RETURNING
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, logged_at, user_id, fit_id, created_at, updated_at;`
+		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at;`
 
 	rows, err := r.db.NamedQueryContext(ctx, q, pc)
 	if err != nil {
@@ -67,7 +67,7 @@ func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, er
 	SELECT
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, logged_at, user_id, fit_id, created_at, updated_at
+		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2
 	ORDER BY logged_at DESC, created_at DESC`
@@ -85,10 +85,17 @@ func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string) 
 	SELECT
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, logged_at, user_id, fit_id, created_at, updated_at
+		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2 AND logged_at = CURRENT_DATE
-	ORDER BY created_at DESC`
+	ORDER BY
+		CASE meal_type
+			WHEN 'breakfast' THEN 1
+			WHEN 'lunch' THEN 2
+			WHEN 'dinner' THEN 3
+			WHEN 'snack' THEN 4
+		END,
+		created_at DESC`
 
 	var ps []Product
 	if err := r.db.SelectContext(ctx, &ps, q, uid, fid); err != nil {
@@ -103,10 +110,17 @@ func (r *repository) GetAllByDate(ctx context.Context, date string, fid string, 
 	SELECT
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, logged_at, user_id, fit_id, created_at, updated_at
+		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2 AND logged_at = $3
-	ORDER BY created_at DESC`
+	ORDER BY
+		CASE meal_type
+			WHEN 'breakfast' THEN 1
+			WHEN 'lunch' THEN 2
+			WHEN 'dinner' THEN 3
+			WHEN 'snack' THEN 4
+		END,
+		created_at DESC`
 
 	var ps []Product
 	if err := r.db.SelectContext(ctx, &ps, q, uid, fid, date); err != nil {
@@ -148,7 +162,7 @@ func (r *repository) GetLikeName(ctx context.Context, name, fid, uid string) ([]
 	SELECT DISTINCT ON (p.name)
 		p.id, p.name, p.amount, p.unit, p.calories, p.protein, p.fat, p.carbs,
 		p.basic_calories, p.basic_protein, p.basic_fat, p.basic_carbs,
-		p.is_water, p.logged_at, p.user_id, p.fit_id, p.created_at, p.updated_at
+		p.is_water, p.meal_type, p.logged_at, p.user_id, p.fit_id, p.created_at, p.updated_at
 	FROM products p
 	WHERE p.name ILIKE $1 AND p.user_id = $2 AND p.fit_id = $3 AND basic_calories != 0
 	ORDER BY p.name, p.created_at DESC
@@ -172,17 +186,19 @@ func (r *repository) UpdateProduct(ctx context.Context, pu Product, fid, uid str
 		protein = :protein,
 		fat = :fat,
 		carbs = :carbs,
+		meal_type = :meal_type,
 		updated_at = now()
 	WHERE id = :id AND fit_id = :fit_id AND user_id = :user_id
 	RETURNING
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, logged_at, user_id, fit_id, created_at, updated_at;`
+		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at;`
 
 	args := map[string]any{
 		"id": pu.Id, "fit_id": fid, "user_id": uid,
 		"name": pu.Name, "amount": pu.Amount, "unit": pu.Unit,
 		"calories": pu.Calories, "protein": pu.Protein, "fat": pu.Fat, "carbs": pu.Carbs,
+		"meal_type": pu.MealType,
 	}
 
 	rows, err := r.db.NamedQueryContext(ctx, q, args)

@@ -33,6 +33,19 @@ func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) (*Product
 	}
 	pc.FitId = f.Id
 
+	// Validate meal_type (only if provided)
+	if pc.MealType != nil {
+		validMealTypes := map[string]bool{
+			"breakfast": true,
+			"lunch":     true,
+			"dinner":    true,
+			"snack":     true,
+		}
+		if !validMealTypes[*pc.MealType] {
+			pc.MealType = nil // Set to nil if invalid
+		}
+	}
+
 	count, err := s.repo.GetCountByToday(ctx, f.Id, pc.UserId)
 	if err != nil {
 		return nil, err
@@ -84,6 +97,19 @@ func (s *service) UpdateProduct(ctx context.Context, pu Product, uid string) (*P
 	f, err := s.fitService.GetFitProfileByUser(uid)
 	if err != nil {
 		return nil, err
+	}
+
+	// Validate meal_type (only if provided)
+	if pu.MealType != nil {
+		validMealTypes := map[string]bool{
+			"breakfast": true,
+			"lunch":     true,
+			"dinner":    true,
+			"snack":     true,
+		}
+		if !validMealTypes[*pu.MealType] {
+			pu.MealType = nil // Set to nil if invalid
+		}
 	}
 
 	return s.repo.UpdateProduct(ctx, pu, f.Id, uid)

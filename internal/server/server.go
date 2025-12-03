@@ -29,6 +29,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/product"
 	"github.com/jourloy/nutri-backend/internal/promo"
+	"github.com/jourloy/nutri-backend/internal/recommendation"
 	"github.com/jourloy/nutri-backend/internal/subscription"
 	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/template"
@@ -89,6 +90,7 @@ func Start() error {
 		consent.NewController().RegisterRoutes(r)
 		promo.NewController().RegisterRoutes(r)
 		ticket.NewController().RegisterRoutes(r)
+		recommendation.NewController().RegisterRoutes(r)
 
 		if newsCtrl, err := news.NewController(); err != nil {
 			logger.Warn("News controller disabled", "error", err)
