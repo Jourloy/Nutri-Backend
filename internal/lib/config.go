@@ -28,12 +28,14 @@ type conf struct {
 	RedisPassword          string
 	RedisDB                int
 	// AI and Storage
-	OpenAIAPIKey    string
-	MinioEndpoint   string
-	MinioAccessKey  string
-	MinioSecretKey  string
-	MinioBucketName string
-	MinioUseSSL     bool
+	AIProvider       string // AI provider to use (perplexity, openai, auto)
+	PerplexityAPIKey string
+	OpenAIAPIKey     string
+	MinioEndpoint    string
+	MinioAccessKey   string
+	MinioSecretKey   string
+	MinioBucketName  string
+	MinioUseSSL      bool
 }
 
 type contextKeys struct {
@@ -167,11 +169,26 @@ func ParseENV() error {
 		return errors.New("cannot find env REDIS_DB")
 	}
 
-	// AI and Storage configuration
+	// AI Provider configuration
+	if env, exist := os.LookupEnv("AI_PROVIDER"); exist {
+		Config.AIProvider = env
+	} else {
+		Config.AIProvider = "perplexity" // Default to Perplexity
+	}
+
+	// Perplexity API Key (required if using Perplexity)
+	if env, exist := os.LookupEnv("PERPLEXITY_API_KEY"); exist {
+		Config.PerplexityAPIKey = env
+	} else if Config.AIProvider == "perplexity" {
+		logger.Error("cannot find env PERPLEXITY_API_KEY (required for Perplexity provider)")
+		return errors.New("cannot find env PERPLEXITY_API_KEY")
+	}
+
+	// OpenAI API Key (now conditional - only required if using OpenAI)
 	if env, exist := os.LookupEnv("OPENAI_API_KEY"); exist {
 		Config.OpenAIAPIKey = env
-	} else {
-		logger.Error("cannot find env OPENAI_API_KEY")
+	} else if Config.AIProvider == "openai" {
+		logger.Error("cannot find env OPENAI_API_KEY (required for OpenAI provider)")
 		return errors.New("cannot find env OPENAI_API_KEY")
 	}
 

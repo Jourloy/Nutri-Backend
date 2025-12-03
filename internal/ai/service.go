@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -17,7 +18,6 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/nfnt/resize"
-	"github.com/sashabaranov/go-openai"
 
 	"github.com/jourloy/nutri-backend/internal/lib"
 )
@@ -30,15 +30,26 @@ type Service interface {
 }
 
 type service struct {
-	repo         Repository
-	openaiClient *openai.Client
-	minioClient  *minio.Client
-	logger       *log.Logger
+	repo        Repository
+	aiProvider  AIProvider
+	minioClient *minio.Client
+	logger      *log.Logger
 }
 
 func NewService(repo Repository) (Service, error) {
-	// Initialize OpenAI client
-	openaiClient := openai.NewClient(lib.Config.OpenAIAPIKey)
+	// Initialize logger first
+	logger := log.NewWithOptions(os.Stderr, log.Options{
+		Prefix: "[ai-svc]",
+		Level:  log.DebugLevel,
+	})
+
+	// Initialize AI provider
+	aiProvider, err := GetProvider(logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize AI provider: %w", err)
+	}
+
+	logger.Info("AI provider initialized", "model", aiProvider.GetModelName())
 
 	// Parse Minio endpoint to extract hostname and determine SSL
 	endpoint := lib.Config.MinioEndpoint
@@ -63,12 +74,6 @@ func NewService(repo Repository) (Service, error) {
 		return nil, fmt.Errorf("failed to initialize minio client: %w", err)
 	}
 
-	// Initialize logger first
-	logger := log.NewWithOptions(os.Stderr, log.Options{
-		Prefix: "[ai-svc]",
-		Level:  log.DebugLevel,
-	})
-
 	// Ensure bucket exists - try to create it, ignore if already exists
 	bucketName := lib.Config.MinioBucketName
 	err = minioClient.MakeBucket(context.Background(), bucketName, minio.MakeBucketOptions{})
@@ -89,10 +94,10 @@ func NewService(repo Repository) (Service, error) {
 	}
 
 	return &service{
-		repo:         repo,
-		openaiClient: openaiClient,
-		minioClient:  minioClient,
-		logger:       logger,
+		repo:        repo,
+		aiProvider:  aiProvider,
+		minioClient: minioClient,
+		logger:      logger,
 	}, nil
 }
 
@@ -130,7 +135,7 @@ func (s *service) AnalyzeFoodImage(ctx context.Context, userId string, imageData
 		RequestType: requestType,
 		UserPrompt:  userPrompt,
 		TotalWeight: totalWeight, // May be nil if not provided
-		ModelUsed:   "gpt-4o",
+		ModelUsed:   s.aiProvider.GetModelName(),
 		Status:      "pending",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -142,38 +147,55 @@ func (s *service) AnalyzeFoodImage(ctx context.Context, userId string, imageData
 	}
 
 	// 4. Process and upload image to Minio
-	imageUrl, err := s.uploadImageToMinio(ctx, userId, imageData)
+	imageUrl, imageBase64, err := s.processAndUploadImage(ctx, userId, imageData)
 	if err != nil {
 		s.updateLogWithError(ctx, createdLog.Id, "failed to upload image", err)
 		return nil, fmt.Errorf("failed to upload image: %w", err)
 	}
 	createdLog.ImageUrl = imageUrl
 
-	// 5. Call OpenAI Vision API
-	response, err := s.callOpenAIVision(ctx, imageUrl, userPrompt, totalWeight, language)
+	// 5. Call AI provider for image analysis
+	response, err := s.aiProvider.AnalyzeImage(ctx, ImageAnalysisRequest{
+		ImageURL:    imageUrl,
+		ImageBase64: imageBase64,
+		UserPrompt:  userPrompt,
+		TotalWeight: totalWeight,
+		Language:    language,
+	})
 	if err != nil {
-		s.updateLogWithError(ctx, createdLog.Id, "openai api error", err)
-		return nil, fmt.Errorf("openai api error: %w", err)
+		s.updateLogWithError(ctx, createdLog.Id, "ai provider error", err)
+		return nil, fmt.Errorf("ai provider error: %w", err)
 	}
 
 	// 6. Check for content moderation flags
-	if s.detectViolation(response) {
-		s.handleViolation(ctx, userId, createdLog.Id, imageUrl, userPrompt, "off_topic", "Content is not food-related or inappropriate")
+	if response.IsViolation {
+		s.handleViolation(ctx, userId, createdLog.Id, imageUrl, userPrompt, "off_topic", response.ViolationReason)
 		s.updateLogWithStatus(ctx, createdLog.Id, "moderated", "Content moderated")
-		return nil, fmt.Errorf("content moderated: image does not appear to be food-related")
+		return nil, fmt.Errorf("content moderated: %s", response.ViolationReason)
 	}
 
-	// 7. Parse response
-	result, err := s.parseOpenAIResponse(response, totalWeight)
-	if err != nil {
-		s.updateLogWithError(ctx, createdLog.Id, "failed to parse response", err)
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	// 7. Convert response to FoodAnalysisResult
+	result := &FoodAnalysisResult{
+		ProductName:        response.ProductName,
+		Confidence:         response.Confidence,
+		Explanation:        response.Explanation,
+		BasicCalories:      response.BasicCalories,
+		BasicProtein:       response.BasicProtein,
+		BasicFat:           response.BasicFat,
+		BasicCarbs:         response.BasicCarbs,
+		Calories:           response.Calories,
+		Protein:            response.Protein,
+		Fat:                response.Fat,
+		Carbs:              response.Carbs,
+		EstimatedWeight:    response.EstimatedWeight,
+		WeightUnit:         response.WeightUnit,
+		UserProvidedWeight: totalWeight != nil,
 	}
 
 	// 8. Calculate costs
-	tokensPrompt := response.Usage.PromptTokens
-	tokensCompletion := response.Usage.CompletionTokens
-	estimatedCost := s.calculateCost(tokensPrompt, tokensCompletion)
+	tokensPrompt := response.PromptTokens
+	tokensCompletion := response.CompletionTokens
+	estimatedCost := s.aiProvider.CalculateCost(tokensPrompt, tokensCompletion)
 
 	// 9. Update analysis log with success
 	responseDataJSON, _ := json.Marshal(response)
@@ -246,7 +268,7 @@ func (s *service) AnalyzeFoodByText(ctx context.Context, userId string, foodName
 		RequestType: requestType,
 		UserPrompt:  userPrompt,
 		TotalWeight: &totalWeight,
-		ModelUsed:   "gpt-4o",
+		ModelUsed:   s.aiProvider.GetModelName(),
 		Status:      "pending",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -257,24 +279,40 @@ func (s *service) AnalyzeFoodByText(ctx context.Context, userId string, foodName
 		return nil, fmt.Errorf("failed to create analysis log: %w", err)
 	}
 
-	// 4. Call OpenAI Text API (without image)
-	response, err := s.callOpenAIText(ctx, foodName, foodDescription, totalWeight, language)
+	// 4. Call AI provider for text analysis
+	response, err := s.aiProvider.AnalyzeText(ctx, TextAnalysisRequest{
+		FoodName:        foodName,
+		FoodDescription: foodDescription,
+		TotalWeight:     totalWeight,
+		Language:        language,
+	})
 	if err != nil {
-		s.updateLogWithError(ctx, createdLog.Id, "openai api error", err)
-		return nil, fmt.Errorf("openai api error: %w", err)
+		s.updateLogWithError(ctx, createdLog.Id, "ai provider error", err)
+		return nil, fmt.Errorf("ai provider error: %w", err)
 	}
 
-	// 5. Parse response
-	result, err := s.parseOpenAIResponse(response, &totalWeight)
-	if err != nil {
-		s.updateLogWithError(ctx, createdLog.Id, "failed to parse response", err)
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	// 5. Convert response to FoodAnalysisResult
+	result := &FoodAnalysisResult{
+		ProductName:        response.ProductName,
+		Confidence:         response.Confidence,
+		Explanation:        response.Explanation,
+		BasicCalories:      response.BasicCalories,
+		BasicProtein:       response.BasicProtein,
+		BasicFat:           response.BasicFat,
+		BasicCarbs:         response.BasicCarbs,
+		Calories:           response.Calories,
+		Protein:            response.Protein,
+		Fat:                response.Fat,
+		Carbs:              response.Carbs,
+		EstimatedWeight:    response.EstimatedWeight,
+		WeightUnit:         response.WeightUnit,
+		UserProvidedWeight: true,
 	}
 
 	// 6. Calculate costs
-	tokensPrompt := response.Usage.PromptTokens
-	tokensCompletion := response.Usage.CompletionTokens
-	estimatedCost := s.calculateCost(tokensPrompt, tokensCompletion)
+	tokensPrompt := response.PromptTokens
+	tokensCompletion := response.CompletionTokens
+	estimatedCost := s.aiProvider.CalculateCost(tokensPrompt, tokensCompletion)
 
 	// 7. Update analysis log with success
 	responseDataJSON, _ := json.Marshal(response)
@@ -362,12 +400,13 @@ func (s *service) GetUserAnalysisHistory(ctx context.Context, userId string, lim
 	return s.repo.GetUserAnalysisLogs(ctx, userId, limit)
 }
 
-// uploadImageToMinio uploads image to Minio with compression
-func (s *service) uploadImageToMinio(ctx context.Context, userId string, imageData []byte) (string, error) {
+// processAndUploadImage processes image (resize, compress) and uploads to Minio
+// Returns: presigned URL for storage, base64 encoded image for AI providers
+func (s *service) processAndUploadImage(ctx context.Context, userId string, imageData []byte) (string, string, error) {
 	// Decode original image
 	img, _, err := image.Decode(bytes.NewReader(imageData))
 	if err != nil {
-		return "", fmt.Errorf("failed to decode image: %w", err)
+		return "", "", fmt.Errorf("failed to decode image: %w", err)
 	}
 
 	// Resize to max 800px width for cost savings
@@ -377,8 +416,11 @@ func (s *service) uploadImageToMinio(ctx context.Context, userId string, imageDa
 	var buf bytes.Buffer
 	err = jpeg.Encode(&buf, resized, &jpeg.Options{Quality: 60})
 	if err != nil {
-		return "", fmt.Errorf("failed to encode image: %w", err)
+		return "", "", fmt.Errorf("failed to encode image: %w", err)
 	}
+
+	// Get base64 encoded image for AI providers
+	imageBase64 := base64.StdEncoding.EncodeToString(buf.Bytes())
 
 	// Generate unique filename
 	filename := fmt.Sprintf("%s/%s_%d.jpg", userId, uuid.New().String(), time.Now().Unix())
@@ -388,245 +430,26 @@ func (s *service) uploadImageToMinio(ctx context.Context, userId string, imageDa
 		ctx,
 		lib.Config.MinioBucketName,
 		filename,
-		&buf,
+		bytes.NewReader(buf.Bytes()),
 		int64(buf.Len()),
 		minio.PutObjectOptions{
 			ContentType: "image/jpeg",
 		},
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to upload to minio: %w", err)
+		return "", "", fmt.Errorf("failed to upload to minio: %w", err)
 	}
 
 	// Generate presigned URL (valid for 7 days for moderation review)
 	presignedURL, err := s.minioClient.PresignedGetObject(ctx, lib.Config.MinioBucketName, filename, 7*24*time.Hour, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned url: %w", err)
+		return "", "", fmt.Errorf("failed to generate presigned url: %w", err)
 	}
 
-	return presignedURL.String(), nil
+	return presignedURL.String(), imageBase64, nil
 }
 
 // callOpenAIVision calls OpenAI Vision API
-func (s *service) callOpenAIVision(ctx context.Context, imageUrl, userPrompt string, totalWeight *float64, language string) (*openai.ChatCompletionResponse, error) {
-	// Language-specific instructions
-	languageInstructions := map[string]string{
-		"ru": "Отвечай на русском языке. Все поля JSON должны содержать русский текст.",
-		"en": "Respond in English. All JSON fields should contain English text.",
-		"es": "Responde en español. Todos los campos JSON deben contener texto en español.",
-		"de": "Antworte auf Deutsch. Alle JSON-Felder sollten deutschen Text enthalten.",
-		"fr": "Répondez en français. Tous les champs JSON doivent contenir du texte en français.",
-	}
-
-	langInstruction := languageInstructions[language]
-	if langInstruction == "" {
-		langInstruction = languageInstructions["en"]
-	}
-
-	var systemPrompt string
-	var userMessage string
-
-	if totalWeight == nil {
-		// Weight not provided - ask AI to estimate
-		systemPrompt = fmt.Sprintf(`You are a nutrition analysis assistant. %s
-
-Analyze the food image and provide detailed nutritional information.
-If the image is NOT food-related or is inappropriate, respond with: {"violation": true, "reason": "not food-related"}
-Otherwise, estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.
-
-Response format (JSON):
-{
-  "productName": "Name of the food item",
-  "confidence": 0.0-1.0,
-  "explanation": "Brief explanation of the food item and portion size estimation",
-  "estimatedWeight": estimated weight in grams or milliliters,
-  "weightUnit": "grams" or "milliliters",
-  "basicCalories": calories per 100g,
-  "basicProtein": protein per 100g,
-  "basicFat": fat per 100g,
-  "basicCarbs": carbs per 100g,
-  "calories": total calories for estimated weight,
-  "protein": total protein for estimated weight,
-  "fat": total fat for estimated weight,
-  "carbs": total carbs for estimated weight
-}`, langInstruction)
-		userMessage = userPrompt
-	} else {
-		// Weight provided by user
-		systemPrompt = fmt.Sprintf(`You are a nutrition analysis assistant. %s
-
-Analyze the food image and provide detailed nutritional information.
-If the image is NOT food-related or is inappropriate, respond with: {"violation": true, "reason": "not food-related"}
-Otherwise, provide accurate nutritional values per 100g AND for the total weight specified by the user.
-
-Response format (JSON):
-{
-  "productName": "Name of the food item",
-  "confidence": 0.0-1.0,
-  "explanation": "Brief explanation of the food item",
-  "basicCalories": calories per 100g,
-  "basicProtein": protein per 100g,
-  "basicFat": fat per 100g,
-  "basicCarbs": carbs per 100g,
-  "calories": total calories for specified weight,
-  "protein": total protein for specified weight,
-  "fat": total fat for specified weight,
-  "carbs": total carbs for specified weight
-}`, langInstruction)
-		userMessage = fmt.Sprintf("%s\n\nTotal weight: %.1fg", userPrompt, *totalWeight)
-	}
-
-	resp, err := s.openaiClient.CreateChatCompletion(
-		ctx,
-		openai.ChatCompletionRequest{
-			Model: openai.GPT4o,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: systemPrompt,
-				},
-				{
-					Role: openai.ChatMessageRoleUser,
-					MultiContent: []openai.ChatMessagePart{
-						{
-							Type: openai.ChatMessagePartTypeText,
-							Text: userMessage,
-						},
-						{
-							Type: openai.ChatMessagePartTypeImageURL,
-							ImageURL: &openai.ChatMessageImageURL{
-								URL:    imageUrl,
-								Detail: openai.ImageURLDetailAuto,
-							},
-						},
-					},
-				},
-			},
-			MaxTokens:   500,
-			Temperature: 0.3,
-		},
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &resp, nil
-}
-
-// callOpenAIText calls OpenAI API for text-based food analysis
-func (s *service) callOpenAIText(ctx context.Context, foodName, foodDescription string, totalWeight float64, language string) (*openai.ChatCompletionResponse, error) {
-	// Language-specific instructions
-	languageInstructions := map[string]string{
-		"ru": "Отвечай на русском языке. Все поля JSON должны содержать русский текст.",
-		"en": "Respond in English. All JSON fields should contain English text.",
-		"es": "Responde en español. Todos los campos JSON deben contener texto en español.",
-		"de": "Antworte auf Deutsch. Alle JSON-Felder sollten deutschen Text enthalten.",
-		"fr": "Répondez en français. Tous les champs JSON doivent contenir du texte en français.",
-	}
-
-	langInstruction := languageInstructions[language]
-	if langInstruction == "" {
-		langInstruction = languageInstructions["en"]
-	}
-
-	systemPrompt := fmt.Sprintf(`You are a nutrition analysis assistant. %s
-
-Analyze the food based on its name and description, and provide detailed nutritional information.
-Provide accurate nutritional values per 100g AND for the total weight specified by the user.
-
-Response format (JSON):
-{
-  "productName": "Name of the food item",
-  "confidence": 0.0-1.0,
-  "explanation": "Brief explanation about the nutritional analysis",
-  "basicCalories": calories per 100g,
-  "basicProtein": protein per 100g,
-  "basicFat": fat per 100g,
-  "basicCarbs": carbs per 100g,
-  "calories": total calories for specified weight,
-  "protein": total protein for specified weight,
-  "fat": total fat for specified weight,
-  "carbs": total carbs for specified weight
-}`, langInstruction)
-
-	userMessage := fmt.Sprintf("Food name: %s\nDescription: %s\nTotal weight: %.1fg\n\nProvide nutritional information for this food.", foodName, foodDescription, totalWeight)
-
-	resp, err := s.openaiClient.CreateChatCompletion(
-		ctx,
-		openai.ChatCompletionRequest{
-			Model: openai.GPT4o,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: systemPrompt,
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: userMessage,
-				},
-			},
-			MaxTokens:   500,
-			Temperature: 0.3,
-		},
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &resp, nil
-}
-
-// parseOpenAIResponse parses OpenAI response into FoodAnalysisResult
-func (s *service) parseOpenAIResponse(response *openai.ChatCompletionResponse, totalWeight *float64) (*FoodAnalysisResult, error) {
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response from openai")
-	}
-
-	content := response.Choices[0].Message.Content
-
-	// Try to parse as JSON
-	var result FoodAnalysisResult
-	err := json.Unmarshal([]byte(content), &result)
-	if err != nil {
-		// If parsing fails, try to extract JSON from markdown code block
-		if strings.Contains(content, "```json") {
-			start := strings.Index(content, "```json") + 7
-			end := strings.LastIndex(content, "```")
-			if end > start {
-				jsonStr := content[start:end]
-				err = json.Unmarshal([]byte(jsonStr), &result)
-			}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse openai response: %w", err)
-		}
-	}
-
-	// Set flag indicating if user provided weight
-	result.UserProvidedWeight = (totalWeight != nil)
-
-	// If weight was not provided by user, AI should have estimated it
-	// The result should already contain EstimatedWeight and WeightUnit from AI
-
-	return &result, nil
-}
-
-// detectViolation checks if response indicates a violation
-func (s *service) detectViolation(response *openai.ChatCompletionResponse) bool {
-	if len(response.Choices) == 0 {
-		return false
-	}
-
-	content := strings.ToLower(response.Choices[0].Message.Content)
-
-	// Check for violation indicators
-	return strings.Contains(content, `"violation": true`) ||
-		strings.Contains(content, "not food-related") ||
-		strings.Contains(content, "inappropriate")
-}
-
 // handleViolation creates violation record and bans user
 func (s *service) handleViolation(ctx context.Context, userId string, logId int64, imageUrl, userPrompt, violationType, reason string) {
 	// Create 7-day ban
@@ -679,16 +502,6 @@ func (s *service) handleViolation(ctx context.Context, userId string, logId int6
 	}
 
 	s.logger.Warn("violation handled", "userId", userId, "violationId", createdViolation.Id, "banUntil", banUntil)
-}
-
-// calculateCost estimates API call cost based on tokens
-func (s *service) calculateCost(promptTokens, completionTokens int) float64 {
-	// GPT-4o pricing (as of 2024)
-	// $5.00 / 1M input tokens
-	// $15.00 / 1M output tokens
-	promptCost := float64(promptTokens) * 5.0 / 1_000_000
-	completionCost := float64(completionTokens) * 15.0 / 1_000_000
-	return promptCost + completionCost
 }
 
 // updateLogWithError updates log with error status
