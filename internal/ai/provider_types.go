@@ -54,6 +54,7 @@ var LanguageInstructions = map[string]string{
 }
 
 // ParseJSONResponse attempts to parse JSON from content, handling markdown code blocks
+// and extracting JSON from text with surrounding content (e.g., Russian text before JSON)
 func ParseJSONResponse(content string, result interface{}) error {
 	// Try direct parsing first
 	err := json.Unmarshal([]byte(content), result)
@@ -84,6 +85,18 @@ func ParseJSONResponse(content string, result interface{}) error {
 			if err == nil {
 				return nil
 			}
+		}
+	}
+
+	// Try to extract JSON object from text (handles cases where AI adds text before/after JSON)
+	// Find the first '{' and last '}' to extract the JSON object
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start != -1 && end != -1 && end > start {
+		jsonStr := content[start : end+1]
+		err = json.Unmarshal([]byte(jsonStr), result)
+		if err == nil {
+			return nil
 		}
 	}
 

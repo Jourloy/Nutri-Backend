@@ -38,6 +38,22 @@ func (p *PerplexityProvider) GetModelName() string {
 	return "sonar-pro"
 }
 
+// getLanguageDescription returns language instruction for JSON schema descriptions
+func getLanguageDescription(language string) string {
+	switch language {
+	case "ru":
+		return "на русском языке"
+	case "es":
+		return "en español"
+	case "de":
+		return "auf Deutsch"
+	case "fr":
+		return "en français"
+	default:
+		return "in English"
+	}
+}
+
 func (p *PerplexityProvider) CalculateCost(promptTokens, completionTokens int) float64 {
 	// Sonar Pro pricing: $3.00 / 1M input tokens, $15.00 / 1M output tokens
 	promptCost := float64(promptTokens) * 3.0 / 1_000_000
@@ -58,47 +74,15 @@ func (p *PerplexityProvider) AnalyzeImage(ctx context.Context, req ImageAnalysis
 		systemPrompt = fmt.Sprintf(`You are a nutrition analysis assistant. %s
 
 Analyze the food image and provide detailed nutritional information.
-If the image is NOT food-related or is inappropriate, respond with: {"violation": true, "reason": "not food-related"}
-Otherwise, estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.
-
-Response format (JSON):
-{
-  "productName": "Name of the food item",
-  "confidence": 0.0-1.0,
-  "explanation": "Brief explanation of the food item and portion size estimation",
-  "estimatedWeight": estimated weight in grams or milliliters,
-  "weightUnit": "grams" or "milliliters",
-  "basicCalories": calories per 100g,
-  "basicProtein": protein per 100g,
-  "basicFat": fat per 100g,
-  "basicCarbs": carbs per 100g,
-  "calories": total calories for estimated weight,
-  "protein": total protein for estimated weight,
-  "fat": total fat for estimated weight,
-  "carbs": total carbs for estimated weight
-}`, langInstruction)
+If the image is NOT food-related or is inappropriate, set violation to true.
+Otherwise, estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.`, langInstruction)
 		userTextContent = req.UserPrompt
 	} else {
 		systemPrompt = fmt.Sprintf(`You are a nutrition analysis assistant. %s
 
 Analyze the food image and provide detailed nutritional information.
-If the image is NOT food-related or is inappropriate, respond with: {"violation": true, "reason": "not food-related"}
-Otherwise, provide accurate nutritional values per 100g AND for the total weight specified by the user.
-
-Response format (JSON):
-{
-  "productName": "Name of the food item",
-  "confidence": 0.0-1.0,
-  "explanation": "Brief explanation of the food item",
-  "basicCalories": calories per 100g,
-  "basicProtein": protein per 100g,
-  "basicFat": fat per 100g,
-  "basicCarbs": carbs per 100g,
-  "calories": total calories for specified weight,
-  "protein": total protein for specified weight,
-  "fat": total fat for specified weight,
-  "carbs": total carbs for specified weight
-}`, langInstruction)
+If the image is NOT food-related or is inappropriate, set violation to true.
+Otherwise, provide accurate nutritional values per 100g AND for the total weight specified by the user.`, langInstruction)
 		userTextContent = fmt.Sprintf("%s\n\nTotal weight: %.1fg", req.UserPrompt, *req.TotalWeight)
 	}
 
@@ -117,6 +101,65 @@ Response format (JSON):
 		},
 	}
 
+	// Define JSON schema for structured output
+	langDesc := getLanguageDescription(req.Language)
+	jsonSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"violation": map[string]interface{}{
+				"type": "boolean",
+			},
+			"reason": map[string]interface{}{
+				"type":        "string",
+				"description": fmt.Sprintf("Reason for violation (%s)", langDesc),
+			},
+			"productName": map[string]interface{}{
+				"type":        "string",
+				"description": fmt.Sprintf("Name of the food item (%s)", langDesc),
+			},
+			"confidence": map[string]interface{}{
+				"type": "number",
+			},
+			"explanation": map[string]interface{}{
+				"type":        "string",
+				"description": fmt.Sprintf("Brief explanation (%s)", langDesc),
+			},
+			"estimatedWeight": map[string]interface{}{
+				"type": "number",
+			},
+			"weightUnit": map[string]interface{}{
+				"type":        "string",
+				"description": fmt.Sprintf("Weight unit (%s), e.g. 'граммы' or 'миллилитры'", langDesc),
+			},
+			"basicCalories": map[string]interface{}{
+				"type": "number",
+			},
+			"basicProtein": map[string]interface{}{
+				"type": "number",
+			},
+			"basicFat": map[string]interface{}{
+				"type": "number",
+			},
+			"basicCarbs": map[string]interface{}{
+				"type": "number",
+			},
+			"calories": map[string]interface{}{
+				"type": "number",
+			},
+			"protein": map[string]interface{}{
+				"type": "number",
+			},
+			"fat": map[string]interface{}{
+				"type": "number",
+			},
+			"carbs": map[string]interface{}{
+				"type": "number",
+			},
+		},
+		"required":             []string{},
+		"additionalProperties": false,
+	}
+
 	payload := map[string]interface{}{
 		"model": "sonar-pro",
 		"messages": []map[string]interface{}{
@@ -125,6 +168,14 @@ Response format (JSON):
 		},
 		"max_tokens":  500,
 		"temperature": 0.3,
+		"response_format": map[string]interface{}{
+			"type": "json_schema",
+			"json_schema": map[string]interface{}{
+				"name":   "food_analysis",
+				"schema": jsonSchema,
+				"strict": true,
+			},
+		},
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -173,6 +224,7 @@ Response format (JSON):
 	}
 
 	content := apiResp.Choices[0].Message.Content
+	p.logger.Debug("raw AI response", "content", content)
 
 	// Check for violations first
 	if p.detectViolation(content) {
@@ -187,6 +239,7 @@ Response format (JSON):
 	var result FoodAnalysisResult
 	err = ParseJSONResponse(content, &result)
 	if err != nil {
+		p.logger.Error("failed to parse AI response", "error", err, "rawContent", content)
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
@@ -226,33 +279,71 @@ func (p *PerplexityProvider) AnalyzeText(ctx context.Context, req TextAnalysisRe
 
 	systemPrompt := fmt.Sprintf(`You are a nutrition analysis assistant. %s
 
-Analyze the food based on its name and description. Provide accurate nutritional values per 100g AND for the total weight.
-
-Response format (JSON):
-{
-  "productName": "Name of the food item",
-  "confidence": 0.0-1.0,
-  "explanation": "Brief explanation",
-  "basicCalories": calories per 100g,
-  "basicProtein": protein per 100g,
-  "basicFat": fat per 100g,
-  "basicCarbs": carbs per 100g,
-  "calories": total calories,
-  "protein": total protein,
-  "fat": total fat,
-  "carbs": total carbs
-}`, langInstruction)
+Analyze the food based on its name and description. Provide accurate nutritional values per 100g AND for the total weight.`, langInstruction)
 
 	userMessage := fmt.Sprintf("Food: %s\nDescription: %s\nWeight: %.1fg", req.FoodName, req.FoodDescription, req.TotalWeight)
 
+	// Define JSON schema for structured output
+	langDesc := getLanguageDescription(req.Language)
+	jsonSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"productName": map[string]interface{}{
+				"type":        "string",
+				"description": fmt.Sprintf("Name of the food item (%s)", langDesc),
+			},
+			"confidence": map[string]interface{}{
+				"type": "number",
+			},
+			"explanation": map[string]interface{}{
+				"type":        "string",
+				"description": fmt.Sprintf("Brief explanation (%s)", langDesc),
+			},
+			"basicCalories": map[string]interface{}{
+				"type": "number",
+			},
+			"basicProtein": map[string]interface{}{
+				"type": "number",
+			},
+			"basicFat": map[string]interface{}{
+				"type": "number",
+			},
+			"basicCarbs": map[string]interface{}{
+				"type": "number",
+			},
+			"calories": map[string]interface{}{
+				"type": "number",
+			},
+			"protein": map[string]interface{}{
+				"type": "number",
+			},
+			"fat": map[string]interface{}{
+				"type": "number",
+			},
+			"carbs": map[string]interface{}{
+				"type": "number",
+			},
+		},
+		"required":             []string{},
+		"additionalProperties": false,
+	}
+
 	payload := map[string]interface{}{
 		"model": "sonar-pro",
-		"messages": []map[string]string{
+		"messages": []map[string]interface{}{
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userMessage},
 		},
 		"max_tokens":  500,
 		"temperature": 0.3,
+		"response_format": map[string]interface{}{
+			"type": "json_schema",
+			"json_schema": map[string]interface{}{
+				"name":   "food_analysis",
+				"schema": jsonSchema,
+				"strict": true,
+			},
+		},
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -301,10 +392,12 @@ Response format (JSON):
 	}
 
 	content := apiResp.Choices[0].Message.Content
+	p.logger.Debug("raw AI response", "content", content)
 
 	var result FoodAnalysisResult
 	err = ParseJSONResponse(content, &result)
 	if err != nil {
+		p.logger.Error("failed to parse AI response", "error", err, "rawContent", content)
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 

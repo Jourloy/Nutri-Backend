@@ -76,7 +76,7 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Re-evaluate achievements asynchronously
-	go func(uid string) { _ , _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
+	go func(uid string) { _, _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
 
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -188,7 +188,7 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func(uid string) { _ , _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
+	go func(uid string) { _, _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -215,14 +215,15 @@ func (c *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = c.service.DeleteProduct(context.Background(), int64(idInt), u.Id)
+	products, err := c.service.DeleteProduct(context.Background(), int64(idInt), u.Id)
 	if err != nil {
 		logger.Error("Error deleting product", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	go func(uid string) { _ , _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
+	go func(uid string) { _, _ = achievement.NewService().EvaluateUser(context.Background(), uid) }(u.Id)
 
 	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(products)
 }

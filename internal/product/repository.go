@@ -19,7 +19,7 @@ type Repository interface {
 	GetCountByToday(ctx context.Context, fid string, uid string) (int, error)
 	GetLikeName(ctx context.Context, name string, fid string, uid string) ([]Product, error)
 	UpdateProduct(ctx context.Context, pu Product, fid string, uid string) (*Product, error)
-	DeleteProduct(ctx context.Context, pid int64, fid string, uid string) error
+	DeleteProduct(ctx context.Context, pid int64, fid string, uid string) ([]Product, error)
 }
 
 type repository struct {
@@ -217,18 +217,19 @@ func (r *repository) UpdateProduct(ctx context.Context, pu Product, fid, uid str
 	return nil, nil
 }
 
-func (r *repository) DeleteProduct(ctx context.Context, pid int64, fid, uid string) error {
-	const q = `
+func (r *repository) DeleteProduct(ctx context.Context, pid int64, fid, uid string) ([]Product, error) {
+	const deleteQ = `
 	DELETE FROM products
 	WHERE id = $1 AND fit_id = $2 AND user_id = $3
 	RETURNING id;`
 
 	var deletedID int64
-	if err := r.db.GetContext(ctx, &deletedID, q, pid, fid, uid); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+	if err := r.db.GetContext(ctx, &deletedID, deleteQ, pid, fid, uid); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
 		}
-		return err
 	}
-	return nil
+
+	// Возвращаем обновлённый список продуктов за сегодня
+	return r.GetAllByToday(ctx, fid, uid)
 }

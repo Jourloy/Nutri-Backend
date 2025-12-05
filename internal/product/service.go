@@ -14,7 +14,7 @@ type Service interface {
 	GetAllByDate(ctx context.Context, date string, uid string) ([]Product, error)
 	GetLikeName(ctx context.Context, name string, uid string) ([]Product, error)
 	UpdateProduct(ctx context.Context, pu Product, uid string) (*Product, error)
-	DeleteProduct(ctx context.Context, id int64, uid string) error
+	DeleteProduct(ctx context.Context, id int64, uid string) ([]Product, error)
 }
 
 type service struct {
@@ -115,10 +115,10 @@ func (s *service) UpdateProduct(ctx context.Context, pu Product, uid string) (*P
 	return s.repo.UpdateProduct(ctx, pu, f.Id, uid)
 }
 
-func (s *service) DeleteProduct(ctx context.Context, id int64, uid string) error {
+func (s *service) DeleteProduct(ctx context.Context, id int64, uid string) ([]Product, error) {
 	f, err := s.fitService.GetFitProfileByUser(uid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	return s.repo.DeleteProduct(ctx, id, f.Id, uid)
