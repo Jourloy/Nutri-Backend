@@ -11,7 +11,7 @@ import (
 )
 
 type Repository interface {
-	CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error)
+	CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error)
 	GetAll(ctx context.Context, fid string, uid string) ([]Product, error)
 	GetAllByToday(ctx context.Context, fid string, uid string) ([]Product, error)
 	GetAllByDate(ctx context.Context, date string, fid string, uid string) ([]Product, error)
@@ -30,7 +30,7 @@ func NewRepository() Repository {
 	return &repository{db: database.Database}
 }
 
-func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error) {
+func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error) {
 	const q = `
 	INSERT INTO products (
 		name, amount, unit, calories, protein, fat, carbs,
@@ -41,10 +41,7 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) (*Prod
 		:basic_calories, :basic_protein, :basic_fat, :basic_carbs,
 		:is_water, :meal_type, COALESCE(:logged_at, CURRENT_DATE), :user_id, :fit_id
 	)
-	RETURNING
-		id, name, amount, unit, calories, protein, fat, carbs,
-		basic_calories, basic_protein, basic_fat, basic_carbs,
-		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at;`
+	RETURNING id;`
 
 	rows, err := r.db.NamedQueryContext(ctx, q, pc)
 	if err != nil {
@@ -52,14 +49,12 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) (*Prod
 	}
 	defer rows.Close()
 
-	var p Product
-	if rows.Next() {
-		if err := rows.StructScan(&p); err != nil {
-			return nil, err
-		}
-		return &p, nil
+	if !rows.Next() {
+		return nil, errors.New("no row returned")
 	}
-	return nil, errors.New("no row returned")
+
+	// Возвращаем обновлённый список продуктов за сегодня
+	return r.GetAllByToday(ctx, pc.FitId, pc.UserId)
 }
 
 func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, error) {

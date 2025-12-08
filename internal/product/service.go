@@ -8,7 +8,7 @@ import (
 )
 
 type Service interface {
-	CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error)
+	CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error)
 	GetAll(ctx context.Context, uid string) ([]Product, error)
 	GetAllByToday(ctx context.Context, uid string) ([]Product, error)
 	GetAllByDate(ctx context.Context, date string, uid string) ([]Product, error)
@@ -26,7 +26,7 @@ func NewService() Service {
 	return &service{repo: NewRepository(), fitService: fit.NewService()}
 }
 
-func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) (*Product, error) {
+func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error) {
 	f, err := s.fitService.GetFitProfileByUser(pc.UserId)
 	if err != nil {
 		return nil, err

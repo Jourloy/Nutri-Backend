@@ -16,6 +16,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/ai"
 	"github.com/jourloy/nutri-backend/internal/analytics"
 	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/nutri-backend/internal/blog"
 	"github.com/jourloy/nutri-backend/internal/body"
 	"github.com/jourloy/nutri-backend/internal/cache"
 	"github.com/jourloy/nutri-backend/internal/consent"
@@ -102,6 +103,12 @@ func Start() error {
 			logger.Warn("AI controller disabled", "error", err)
 		} else {
 			aiCtrl.RegisterRoutes(r)
+		}
+
+		if blogCtrl, err := blog.NewController(); err != nil {
+			logger.Warn("Blog controller disabled", "error", err)
+		} else {
+			blogCtrl.RegisterRoutes(r)
 		}
 
 		// Admin routes (requires admin middleware)
