@@ -717,8 +717,24 @@ func (s *service) handleCPRecurrent(ctx context.Context, payload map[string]any,
 	case "suspended":
 		sub.Status = "past_due"
 	case "cancelled", "canceled", "finished", "completed":
-		sub.Status = "canceled"
+		now := time.Now()
+		sub.CanceledAt = &now
 		sub.CancelAt = nil
+		sub.ExternalSubscription = nil // убрать связь с CloudPayments
+
+		// Понизить до START плана
+		startPlan, err := s.planRepo.GetByCode(ctx, "START")
+		if err == nil && startPlan != nil {
+			sub.PlanId = startPlan.Id
+			sub.AmountMinor = startPlan.AmountMinor
+			sub.Currency = startPlan.Currency
+			sub.BillingPeriod = startPlan.BillingPeriod
+			sub.Status = "active" // START - бесплатный активный план
+			sub.PeriodStart = now
+			sub.PeriodEnd = addMonths(now, monthsForBillingPeriod(startPlan.BillingPeriod))
+		} else {
+			sub.Status = "canceled"
+		}
 	default:
 		sub.Status = "past_due"
 	}

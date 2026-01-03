@@ -11,6 +11,7 @@ import (
 type Repository interface {
 	GetAllActive(ctx context.Context) ([]Plan, error)
 	GetAllActiveByCurrency(ctx context.Context, currency string) ([]Plan, error)
+	GetByCode(ctx context.Context, code string) (*Plan, error)
 	Create(ctx context.Context, pc PlanCreate) (*Plan, error)
 	Update(ctx context.Context, p Plan) (*Plan, error)
 	Delete(ctx context.Context, id int64) error
@@ -54,6 +55,21 @@ func (r *repository) GetAllActiveByCurrency(ctx context.Context, currency string
 		return nil, err
 	}
 	return ps, nil
+}
+
+func (r *repository) GetByCode(ctx context.Context, code string) (*Plan, error) {
+	const q = `
+        SELECT id, code, name, plan_type, version, currency,
+               amount_minor, billing_period, trial_days, client_limit,
+               is_active, created_at, updated_at, external_product_id, external_price_id
+        FROM plans
+        WHERE code = $1 AND is_active = TRUE
+        LIMIT 1`
+	var p Plan
+	if err := r.db.GetContext(ctx, &p, q, code); err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 func (r *repository) Create(ctx context.Context, pc PlanCreate) (*Plan, error) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
+	"github.com/jourloy/nutri-backend/pkg/timeutil"
 )
 
 var (
@@ -29,6 +30,7 @@ func NewController() *Controller {
 func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/user", func(r chi.Router) {
 		r.Get("/stats", c.GetStats)
+		r.Put("/timezone", c.UpdateTimezone)
 
 		// Email verification routes
 		r.Route("/email", func(r chi.Router) {
@@ -41,6 +43,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 
 	logger.Info("╔═════ User")
 	logger.Info("║    GET /stats")
+	logger.Info("║    PUT /timezone")
 	logger.Info("║    POST /email/request")
 	logger.Info("║    POST /email/verify")
 	logger.Info("║    POST /email/resend")
@@ -171,4 +174,43 @@ func (c *Controller) GetEmailStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(status)
+}
+
+// UpdateTimezone обновляет timezone пользователя
+func (c *Controller) UpdateTimezone(w http.ResponseWriter, r *http.Request) {
+	u, ok := UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Timezone string `json:"timezone"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Timezone == "" {
+		http.Error(w, "timezone is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate timezone
+	if !timeutil.ValidateTimezone(req.Timezone) {
+		http.Error(w, "invalid timezone", http.StatusBadRequest)
+		return
+	}
+
+	user, err := c.service.UpdateTimezone(r.Context(), u.Id, req.Timezone)
+	if err != nil {
+		logger.Error("Error updating timezone", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(user)
 }

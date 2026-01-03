@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/nutri-backend/pkg/timeutil"
 )
 
 var (
@@ -43,7 +44,10 @@ func (c *Controller) GetDailyRecommendations(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resp, err := c.service.GetDailyRecommendations(context.Background(), u.Id)
+	// Get today's date based on user's timezone
+	today := timeutil.CurrentDateForTimezone(timeutil.GetTimezoneOrDefault(u.Timezone))
+
+	resp, err := c.service.GetDailyRecommendations(context.Background(), u.Id, today)
 	if err != nil {
 		logger.Error("Error getting recommendations", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)

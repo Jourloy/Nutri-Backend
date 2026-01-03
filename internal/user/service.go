@@ -16,6 +16,7 @@ type Service interface {
 	DeleteUser(ctx context.Context, id string) (*User, error)
 	InvalidateTokens(ctx context.Context, id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
+	UpdateTimezone(ctx context.Context, uid string, timezone string) (*User, error)
 	GetUserStats(ctx context.Context, uid string) (*UserStats, error)
 	RequestEmailVerification(ctx context.Context, uid string, email string) error
 	VerifyEmail(ctx context.Context, uid string, code string) (*User, error)
@@ -75,6 +76,10 @@ func (s *service) InvalidateTokens(ctx context.Context, id string) error {
 
 func (s *service) UpdateLocale(ctx context.Context, uid string, locale string) (*User, error) {
 	return s.repo.UpdateLocale(ctx, uid, locale)
+}
+
+func (s *service) UpdateTimezone(ctx context.Context, uid string, timezone string) (*User, error) {
+	return s.repo.UpdateTimezone(ctx, uid, timezone)
 }
 
 func (s *service) GetUserStats(ctx context.Context, uid string) (*UserStats, error) {

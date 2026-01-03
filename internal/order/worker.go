@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/subscription"
 )
 
@@ -65,5 +66,41 @@ func runRenewals(ctx context.Context, logger *log.Logger, subRepo subscription.R
 			logger.Error("update sub", "err", uerr)
 		}
 	}
+
+	// Страховка: понизить подписки с истекшим периодом без external_subscription_id
+	planRepo := plan.NewRepository()
+	startPlan, err := planRepo.GetByCode(ctx, "START")
+	if err != nil {
+		logger.Warn("failed to get START plan for downgrade check", "err", err)
+		return nil
+	}
+
+	for _, s := range subs {
+		// Пропустить подписки с действующим периодом
+		if s.PeriodEnd.After(now) {
+			continue
+		}
+		// Пропустить уже на START плане
+		if s.PlanId == startPlan.Id {
+			continue
+		}
+		// Пропустить подписки с активной связью с CloudPayments (они обрабатываются webhook-ами)
+		if s.ExternalSubscription != nil && *s.ExternalSubscription != "" {
+			continue
+		}
+		// Понизить до START
+		logger.Info("downgrading expired subscription", "user", s.UserId, "old_plan_id", s.PlanId)
+		s.PlanId = startPlan.Id
+		s.AmountMinor = startPlan.AmountMinor
+		s.Currency = startPlan.Currency
+		s.BillingPeriod = startPlan.BillingPeriod
+		s.Status = "active"
+		s.PeriodStart = now
+		s.PeriodEnd = addMonths(now, 1)
+		if _, uerr := subRepo.Update(ctx, s); uerr != nil {
+			logger.Error("downgrade sub", "err", uerr)
+		}
+	}
+
 	return nil
 }

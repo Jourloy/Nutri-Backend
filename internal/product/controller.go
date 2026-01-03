@@ -12,6 +12,7 @@ import (
 
 	"github.com/jourloy/nutri-backend/internal/achievement"
 	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/nutri-backend/pkg/timeutil"
 )
 
 var (
@@ -68,7 +69,10 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 
 	pc.UserId = u.Id
 
-	resp, err := c.service.CreateProduct(context.Background(), pc)
+	// Get today's date based on user's timezone
+	today := timeutil.CurrentDateForTimezone(timeutil.GetTimezoneOrDefault(u.Timezone))
+
+	resp, err := c.service.CreateProduct(context.Background(), pc, today)
 	if err != nil {
 		logger.Error("Error creating product", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -107,7 +111,10 @@ func (c *Controller) GetAllByToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := c.service.GetAllByToday(context.Background(), u.Id)
+	// Get today's date based on user's timezone
+	today := timeutil.CurrentDateForTimezone(timeutil.GetTimezoneOrDefault(u.Timezone))
+
+	resp, err := c.service.GetAllByToday(context.Background(), u.Id, today)
 	if err != nil {
 		logger.Error("Error get all by today", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -215,7 +222,10 @@ func (c *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	products, err := c.service.DeleteProduct(context.Background(), int64(idInt), u.Id)
+	// Get today's date based on user's timezone
+	today := timeutil.CurrentDateForTimezone(timeutil.GetTimezoneOrDefault(u.Timezone))
+
+	products, err := c.service.DeleteProduct(context.Background(), int64(idInt), u.Id, today)
 	if err != nil {
 		logger.Error("Error deleting product", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)

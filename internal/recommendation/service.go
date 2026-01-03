@@ -15,7 +15,7 @@ type Recommendation struct {
 }
 
 type Service interface {
-	GetDailyRecommendations(ctx context.Context, uid string) ([]Recommendation, error)
+	GetDailyRecommendations(ctx context.Context, uid string, today string) ([]Recommendation, error)
 }
 
 type service struct {
@@ -30,7 +30,7 @@ func NewService() Service {
 	}
 }
 
-func (s *service) GetDailyRecommendations(ctx context.Context, uid string) ([]Recommendation, error) {
+func (s *service) GetDailyRecommendations(ctx context.Context, uid string, today string) ([]Recommendation, error) {
 	// Get user's fit profile
 	fitProfile, err := s.fitService.GetFitProfileByUser(uid)
 	if err != nil {
@@ -38,7 +38,7 @@ func (s *service) GetDailyRecommendations(ctx context.Context, uid string) ([]Re
 	}
 
 	// Get today's products
-	products, err := s.productService.GetAllByToday(ctx, uid)
+	products, err := s.productService.GetAllByToday(ctx, uid, today)
 	if err != nil {
 		return nil, err
 	}

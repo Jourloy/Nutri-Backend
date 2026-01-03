@@ -12,6 +12,7 @@ type User struct {
 	Email           *string    `json:"email,omitempty" db:"email"`
 	EmailVerified   bool       `json:"emailVerified" db:"email_verified"`
 	Locale          *string    `json:"locale" db:"locale"`
+	Timezone        *string    `json:"timezone,omitempty" db:"timezone"`
 	IsAcceptTerms   bool       `json:"isAcceptTerms" db:"is_accept_terms"`
 	IsAcceptPrivacy bool       `json:"IsAcceptPrivacy" db:"is_accept_privacy"`
 	Is18            bool       `json:"-" db:"is_18"`
@@ -30,6 +31,7 @@ type UserCreate struct {
 	Username     string  `db:"username"`
 	PasswordHash string  `db:"password_hash"`
 	Locale       *string `db:"locale"`
+	Timezone     *string `db:"timezone"`
 }
 
 // UserStats представляет статистику пользователя

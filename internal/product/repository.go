@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -11,15 +12,15 @@ import (
 )
 
 type Repository interface {
-	CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error)
+	CreateProduct(ctx context.Context, pc ProductCreate, today string) ([]Product, error)
 	GetAll(ctx context.Context, fid string, uid string) ([]Product, error)
-	GetAllByToday(ctx context.Context, fid string, uid string) ([]Product, error)
+	GetAllByToday(ctx context.Context, fid string, uid string, today string) ([]Product, error)
 	GetAllByDate(ctx context.Context, date string, fid string, uid string) ([]Product, error)
 	GetCount(ctx context.Context, fid string, uid string) (int, error)
-	GetCountByToday(ctx context.Context, fid string, uid string) (int, error)
+	GetCountByToday(ctx context.Context, fid string, uid string, today string) (int, error)
 	GetLikeName(ctx context.Context, name string, fid string, uid string) ([]Product, error)
 	UpdateProduct(ctx context.Context, pu Product, fid string, uid string) (*Product, error)
-	DeleteProduct(ctx context.Context, pid int64, fid string, uid string) ([]Product, error)
+	DeleteProduct(ctx context.Context, pid int64, fid string, uid string, today string) ([]Product, error)
 }
 
 type repository struct {
@@ -30,7 +31,7 @@ func NewRepository() Repository {
 	return &repository{db: database.Database}
 }
 
-func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error) {
+func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate, today string) ([]Product, error) {
 	const q = `
 	INSERT INTO products (
 		name, amount, unit, calories, protein, fat, carbs,
@@ -39,9 +40,17 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) ([]Pro
 	) VALUES (
 		:name, :amount, :unit, :calories, :protein, :fat, :carbs,
 		:basic_calories, :basic_protein, :basic_fat, :basic_carbs,
-		:is_water, :meal_type, COALESCE(:logged_at, CURRENT_DATE), :user_id, :fit_id
+		:is_water, :meal_type, :logged_at, :user_id, :fit_id
 	)
 	RETURNING id;`
+
+	// Для совместимости с NamedQuery подставляем today в logged_at если nil
+	if pc.LoggedAt == nil {
+		t, err := time.Parse("2006-01-02", today)
+		if err == nil {
+			pc.LoggedAt = &t
+		}
+	}
 
 	rows, err := r.db.NamedQueryContext(ctx, q, pc)
 	if err != nil {
@@ -54,7 +63,7 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate) ([]Pro
 	}
 
 	// Возвращаем обновлённый список продуктов за сегодня
-	return r.GetAllByToday(ctx, pc.FitId, pc.UserId)
+	return r.GetAllByToday(ctx, pc.FitId, pc.UserId, today)
 }
 
 func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, error) {
@@ -75,14 +84,14 @@ func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, er
 	return ps, nil
 }
 
-func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string) ([]Product, error) {
+func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string, today string) ([]Product, error) {
 	const q = `
 	SELECT
 		id, name, amount, unit, calories, protein, fat, carbs,
 		basic_calories, basic_protein, basic_fat, basic_carbs,
 		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
-	WHERE user_id = $1 AND fit_id = $2 AND logged_at = CURRENT_DATE
+	WHERE user_id = $1 AND fit_id = $2 AND logged_at = $3
 	ORDER BY
 		CASE meal_type
 			WHEN 'breakfast' THEN 1
@@ -93,7 +102,7 @@ func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string) 
 		created_at DESC`
 
 	var ps []Product
-	if err := r.db.SelectContext(ctx, &ps, q, uid, fid); err != nil {
+	if err := r.db.SelectContext(ctx, &ps, q, uid, fid, today); err != nil {
 		return nil, err
 	}
 
@@ -138,13 +147,13 @@ func (r *repository) GetCount(ctx context.Context, fid, uid string) (int, error)
 	return count, nil
 }
 
-func (r *repository) GetCountByToday(ctx context.Context, fid, uid string) (int, error) {
+func (r *repository) GetCountByToday(ctx context.Context, fid, uid string, today string) (int, error) {
 	const q = `
 	SELECT COUNT(*) FROM products
-	WHERE user_id = $1 AND fit_id = $2 AND logged_at = CURRENT_DATE`
+	WHERE user_id = $1 AND fit_id = $2 AND logged_at = $3`
 
 	var count int
-	if err := r.db.GetContext(ctx, &count, q, uid, fid); err != nil {
+	if err := r.db.GetContext(ctx, &count, q, uid, fid, today); err != nil {
 		return 0, err
 	}
 
@@ -212,7 +221,7 @@ func (r *repository) UpdateProduct(ctx context.Context, pu Product, fid, uid str
 	return nil, nil
 }
 
-func (r *repository) DeleteProduct(ctx context.Context, pid int64, fid, uid string) ([]Product, error) {
+func (r *repository) DeleteProduct(ctx context.Context, pid int64, fid, uid string, today string) ([]Product, error) {
 	const deleteQ = `
 	DELETE FROM products
 	WHERE id = $1 AND fit_id = $2 AND user_id = $3
@@ -226,5 +235,5 @@ func (r *repository) DeleteProduct(ctx context.Context, pid int64, fid, uid stri
 	}
 
 	// Возвращаем обновлённый список продуктов за сегодня
-	return r.GetAllByToday(ctx, fid, uid)
+	return r.GetAllByToday(ctx, fid, uid, today)
 }

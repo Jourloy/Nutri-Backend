@@ -8,13 +8,13 @@ import (
 )
 
 type Service interface {
-	CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error)
+	CreateProduct(ctx context.Context, pc ProductCreate, today string) ([]Product, error)
 	GetAll(ctx context.Context, uid string) ([]Product, error)
-	GetAllByToday(ctx context.Context, uid string) ([]Product, error)
+	GetAllByToday(ctx context.Context, uid string, today string) ([]Product, error)
 	GetAllByDate(ctx context.Context, date string, uid string) ([]Product, error)
 	GetLikeName(ctx context.Context, name string, uid string) ([]Product, error)
 	UpdateProduct(ctx context.Context, pu Product, uid string) (*Product, error)
-	DeleteProduct(ctx context.Context, id int64, uid string) ([]Product, error)
+	DeleteProduct(ctx context.Context, id int64, uid string, today string) ([]Product, error)
 }
 
 type service struct {
@@ -26,7 +26,7 @@ func NewService() Service {
 	return &service{repo: NewRepository(), fitService: fit.NewService()}
 }
 
-func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) ([]Product, error) {
+func (s *service) CreateProduct(ctx context.Context, pc ProductCreate, today string) ([]Product, error) {
 	f, err := s.fitService.GetFitProfileByUser(pc.UserId)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) ([]Produc
 		}
 	}
 
-	count, err := s.repo.GetCountByToday(ctx, f.Id, pc.UserId)
+	count, err := s.repo.GetCountByToday(ctx, f.Id, pc.UserId, today)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (s *service) CreateProduct(ctx context.Context, pc ProductCreate) ([]Produc
 		return nil, errors.New("you have reached the maximum number of products for today")
 	}
 
-	return s.repo.CreateProduct(ctx, pc)
+	return s.repo.CreateProduct(ctx, pc, today)
 }
 
 func (s *service) GetAll(ctx context.Context, uid string) ([]Product, error) {
@@ -66,13 +66,13 @@ func (s *service) GetAll(ctx context.Context, uid string) ([]Product, error) {
 	return s.repo.GetAll(ctx, f.Id, uid)
 }
 
-func (s *service) GetAllByToday(ctx context.Context, uid string) ([]Product, error) {
+func (s *service) GetAllByToday(ctx context.Context, uid string, today string) ([]Product, error) {
 	f, err := s.fitService.GetFitProfileByUser(uid)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.repo.GetAllByToday(ctx, f.Id, uid)
+	return s.repo.GetAllByToday(ctx, f.Id, uid, today)
 }
 
 func (s *service) GetAllByDate(ctx context.Context, date string, uid string) ([]Product, error) {
@@ -115,11 +115,11 @@ func (s *service) UpdateProduct(ctx context.Context, pu Product, uid string) (*P
 	return s.repo.UpdateProduct(ctx, pu, f.Id, uid)
 }
 
-func (s *service) DeleteProduct(ctx context.Context, id int64, uid string) ([]Product, error) {
+func (s *service) DeleteProduct(ctx context.Context, id int64, uid string, today string) ([]Product, error) {
 	f, err := s.fitService.GetFitProfileByUser(uid)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.repo.DeleteProduct(ctx, id, f.Id, uid)
+	return s.repo.DeleteProduct(ctx, id, f.Id, uid, today)
 }

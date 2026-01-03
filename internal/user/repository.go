@@ -21,6 +21,7 @@ type Repository interface {
 	SetEmailVerified(ctx context.Context, uid string, email string) (*User, error)
 	InvalidateTokens(ctx context.Context, id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
+	UpdateTimezone(ctx context.Context, uid string, timezone string) (*User, error)
 	GetUserStats(ctx context.Context, uid string) (*UserStats, error)
 }
 
@@ -35,7 +36,7 @@ func NewRepository() Repository {
 // единый список колонок — не используем SELECT *
 const userColumns = `
     id, username, password_hash,
-    email, email_verified, locale,
+    email, email_verified, locale, timezone,
     is_accept_terms, is_accept_privacy, is_18, is_admin,
     token_version, view_updates, view_tutorial,
     logined_at, created_at, updated_at, deleted_at
@@ -43,18 +44,24 @@ const userColumns = `
 
 func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*User, error) {
 	const insertQ = `
-	INSERT INTO users (username, password_hash, view_updates, locale)
-	VALUES (:username, :password_hash, :view_updates, :locale)
+	INSERT INTO users (username, password_hash, view_updates, locale, timezone)
+	VALUES (:username, :password_hash, :view_updates, :locale, :timezone)
 	ON CONFLICT (username) DO NOTHING
 	RETURNING ` + userColumns + `;`
 
 	locale := userCreate.Locale
+	timezone := userCreate.Timezone
+	if timezone == nil {
+		defaultTz := "UTC"
+		timezone = &defaultTz
+	}
 
 	args := map[string]any{
 		"username":      userCreate.Username,
 		"password_hash": userCreate.PasswordHash,
 		"view_updates":  3,
 		"locale":        locale,
+		"timezone":      timezone,
 	}
 
 	// Сначала пытаемся вставить и сразу вернуть строку
@@ -276,7 +283,35 @@ func (r *repository) UpdateLocale(ctx context.Context, uid string, locale string
 	return &u, nil
 }
 
+func (r *repository) UpdateTimezone(ctx context.Context, uid string, timezone string) (*User, error) {
+	const q = `
+        UPDATE users
+        SET timezone = $2,
+            updated_at = now()
+        WHERE id = $1
+        RETURNING ` + userColumns + `;`
+
+	var u User
+	if err := r.db.GetContext(ctx, &u, q, uid, timezone); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (r *repository) GetUserStats(ctx context.Context, uid string) (*UserStats, error) {
+	// First get user's timezone
+	user, err := r.GetUser(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	tz := "UTC"
+	if user != nil && user.Timezone != nil && *user.Timezone != "" {
+		tz = *user.Timezone
+	}
+
 	const q = `
 	WITH user_data AS (
 		SELECT
@@ -328,14 +363,15 @@ func (r *repository) GetUserStats(ctx context.Context, uid string) (*UserStats, 
 		return nil, err
 	}
 
-	// Calculate current streak separately (complex logic)
-	stats.CurrentStreak = r.calculateCurrentStreak(ctx, uid)
+	// Calculate current streak separately (complex logic) using user's timezone
+	stats.CurrentStreak = r.calculateCurrentStreak(ctx, uid, tz)
 
 	return &stats, nil
 }
 
 // calculateCurrentStreak calculates the current consecutive days with at least 1 product
-func (r *repository) calculateCurrentStreak(ctx context.Context, uid string) int {
+// Uses user's timezone to determine "today"
+func (r *repository) calculateCurrentStreak(ctx context.Context, uid string, tz string) int {
 	type row struct {
 		D string `db:"d"`
 	}
@@ -346,10 +382,18 @@ func (r *repository) calculateCurrentStreak(ctx context.Context, uid string) int
 		SELECT DISTINCT date_trunc('day', logged_at)::date::text AS d
 		FROM products
 		WHERE user_id = $1
-		AND logged_at >= CURRENT_DATE - INTERVAL '365 days'
+		AND logged_at >= $2::date - INTERVAL '365 days'
 		ORDER BY d DESC`
 
-	if err := r.db.SelectContext(ctx, &days, q, uid); err != nil || len(days) == 0 {
+	// Get today based on user's timezone
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.UTC
+	}
+	currentDate := time.Now().In(loc)
+	todayStr := currentDate.Format("2006-01-02")
+
+	if err := r.db.SelectContext(ctx, &days, q, uid, todayStr); err != nil || len(days) == 0 {
 		return 0
 	}
 
@@ -361,7 +405,6 @@ func (r *repository) calculateCurrentStreak(ctx context.Context, uid string) int
 
 	// Count consecutive days from today backwards
 	streak := 0
-	currentDate := time.Now()
 
 	for i := 0; i < 365; i++ {
 		dateStr := currentDate.AddDate(0, 0, -i).Format("2006-01-02")
