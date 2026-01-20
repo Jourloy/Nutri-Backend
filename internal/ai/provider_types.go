@@ -28,14 +28,18 @@ type AnalysisResponse struct {
 	ProductName      string
 	Confidence       float64
 	Explanation      string
-	BasicCalories    float64 // per 100g
-	BasicProtein     float64 // per 100g
-	BasicFat         float64 // per 100g
-	BasicCarbs       float64 // per 100g
-	Calories         float64 // for total weight
-	Protein          float64 // for total weight
-	Fat              float64 // for total weight
-	Carbs            float64 // for total weight
+	BasicCalories    float64  // per 100g
+	BasicProtein     float64  // per 100g
+	BasicFat         float64  // per 100g
+	BasicCarbs       float64  // per 100g
+	BasicFiber       *float64 // per 100g (nullable)
+	BasicCholesterol *float64 // per 100g in mg (nullable)
+	Calories         float64  // for total weight
+	Protein          float64  // for total weight
+	Fat              float64  // for total weight
+	Carbs            float64  // for total weight
+	Fiber            *float64 // for total weight (nullable)
+	Cholesterol      *float64 // for total weight in mg (nullable)
 	EstimatedWeight  *float64
 	WeightUnit       *string
 	PromptTokens     int

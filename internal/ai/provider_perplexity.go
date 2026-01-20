@@ -75,14 +75,26 @@ func (p *PerplexityProvider) AnalyzeImage(ctx context.Context, req ImageAnalysis
 
 Analyze the food image and provide detailed nutritional information.
 If the image is NOT food-related or is inappropriate, set violation to true.
-Otherwise, estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.`, langInstruction)
+
+IMPORTANT: The user may provide a product name and/or quantity in their message (e.g., "3 pancakes with condensed milk").
+- If the user specified a name/quantity AND the image matches this description, use the user's name and quantity exactly
+- If the image clearly shows a DIFFERENT product than described (e.g., user says "pancakes" but image shows soup), identify the actual product from the image
+- When in doubt, trust the image over the user's description
+
+Estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.`, langInstruction)
 		userTextContent = req.UserPrompt
 	} else {
 		systemPrompt = fmt.Sprintf(`You are a nutrition analysis assistant. %s
 
 Analyze the food image and provide detailed nutritional information.
 If the image is NOT food-related or is inappropriate, set violation to true.
-Otherwise, provide accurate nutritional values per 100g AND for the total weight specified by the user.`, langInstruction)
+
+IMPORTANT: The user may provide a product name and/or quantity in their message (e.g., "3 pancakes with condensed milk").
+- If the user specified a name/quantity AND the image matches this description, use the user's name and quantity exactly
+- If the image clearly shows a DIFFERENT product than described (e.g., user says "pancakes" but image shows soup), identify the actual product from the image
+- When in doubt, trust the image over the user's description
+
+Provide accurate nutritional values per 100g AND for the total weight specified by the user.`, langInstruction)
 		userTextContent = fmt.Sprintf("%s\n\nTotal weight: %.1fg", req.UserPrompt, *req.TotalWeight)
 	}
 
@@ -143,6 +155,14 @@ Otherwise, provide accurate nutritional values per 100g AND for the total weight
 			"basicCarbs": map[string]interface{}{
 				"type": "number",
 			},
+			"basicFiber": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Fiber per 100g in grams (null if unknown)",
+			},
+			"basicCholesterol": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Cholesterol per 100g in mg (null if unknown)",
+			},
 			"calories": map[string]interface{}{
 				"type": "number",
 			},
@@ -154,6 +174,14 @@ Otherwise, provide accurate nutritional values per 100g AND for the total weight
 			},
 			"carbs": map[string]interface{}{
 				"type": "number",
+			},
+			"fiber": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Total fiber in grams (null if unknown)",
+			},
+			"cholesterol": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Total cholesterol in mg (null if unknown)",
 			},
 		},
 		"required":             []string{},
@@ -251,10 +279,14 @@ Otherwise, provide accurate nutritional values per 100g AND for the total weight
 		BasicProtein:     result.BasicProtein,
 		BasicFat:         result.BasicFat,
 		BasicCarbs:       result.BasicCarbs,
+		BasicFiber:       result.BasicFiber,
+		BasicCholesterol: result.BasicCholesterol,
 		Calories:         result.Calories,
 		Protein:          result.Protein,
 		Fat:              result.Fat,
 		Carbs:            result.Carbs,
+		Fiber:            result.Fiber,
+		Cholesterol:      result.Cholesterol,
 		EstimatedWeight:  result.EstimatedWeight,
 		WeightUnit:       result.WeightUnit,
 		PromptTokens:     apiResp.Usage.PromptTokens,
@@ -311,6 +343,14 @@ Analyze the food based on its name and description. Provide accurate nutritional
 			"basicCarbs": map[string]interface{}{
 				"type": "number",
 			},
+			"basicFiber": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Fiber per 100g in grams (null if unknown)",
+			},
+			"basicCholesterol": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Cholesterol per 100g in mg (null if unknown)",
+			},
 			"calories": map[string]interface{}{
 				"type": "number",
 			},
@@ -322,6 +362,14 @@ Analyze the food based on its name and description. Provide accurate nutritional
 			},
 			"carbs": map[string]interface{}{
 				"type": "number",
+			},
+			"fiber": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Total fiber in grams (null if unknown)",
+			},
+			"cholesterol": map[string]interface{}{
+				"type":        []string{"number", "null"},
+				"description": "Total cholesterol in mg (null if unknown)",
 			},
 		},
 		"required":             []string{},
@@ -409,10 +457,14 @@ Analyze the food based on its name and description. Provide accurate nutritional
 		BasicProtein:     result.BasicProtein,
 		BasicFat:         result.BasicFat,
 		BasicCarbs:       result.BasicCarbs,
+		BasicFiber:       result.BasicFiber,
+		BasicCholesterol: result.BasicCholesterol,
 		Calories:         result.Calories,
 		Protein:          result.Protein,
 		Fat:              result.Fat,
 		Carbs:            result.Carbs,
+		Fiber:            result.Fiber,
+		Cholesterol:      result.Cholesterol,
 		PromptTokens:     apiResp.Usage.PromptTokens,
 		CompletionTokens: apiResp.Usage.CompletionTokens,
 		IsViolation:      false,

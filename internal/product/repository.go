@@ -34,12 +34,12 @@ func NewRepository() Repository {
 func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate, today string) ([]Product, error) {
 	const q = `
 	INSERT INTO products (
-		name, amount, unit, calories, protein, fat, carbs,
-		basic_calories, basic_protein, basic_fat, basic_carbs,
+		name, amount, unit, calories, protein, fat, carbs, fiber, cholesterol,
+		basic_calories, basic_protein, basic_fat, basic_carbs, basic_fiber, basic_cholesterol,
 		is_water, meal_type, logged_at, user_id, fit_id
 	) VALUES (
-		:name, :amount, :unit, :calories, :protein, :fat, :carbs,
-		:basic_calories, :basic_protein, :basic_fat, :basic_carbs,
+		:name, :amount, :unit, :calories, :protein, :fat, :carbs, :fiber, :cholesterol,
+		:basic_calories, :basic_protein, :basic_fat, :basic_carbs, :basic_fiber, :basic_cholesterol,
 		:is_water, :meal_type, :logged_at, :user_id, :fit_id
 	)
 	RETURNING id;`
@@ -69,8 +69,8 @@ func (r *repository) CreateProduct(ctx context.Context, pc ProductCreate, today 
 func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, error) {
 	const q = `
 	SELECT
-		id, name, amount, unit, calories, protein, fat, carbs,
-		basic_calories, basic_protein, basic_fat, basic_carbs,
+		id, name, amount, unit, calories, protein, fat, carbs, fiber, cholesterol,
+		basic_calories, basic_protein, basic_fat, basic_carbs, basic_fiber, basic_cholesterol,
 		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2
@@ -87,8 +87,8 @@ func (r *repository) GetAll(ctx context.Context, fid, uid string) ([]Product, er
 func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string, today string) ([]Product, error) {
 	const q = `
 	SELECT
-		id, name, amount, unit, calories, protein, fat, carbs,
-		basic_calories, basic_protein, basic_fat, basic_carbs,
+		id, name, amount, unit, calories, protein, fat, carbs, fiber, cholesterol,
+		basic_calories, basic_protein, basic_fat, basic_carbs, basic_fiber, basic_cholesterol,
 		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2 AND logged_at = $3
@@ -112,8 +112,8 @@ func (r *repository) GetAllByToday(ctx context.Context, fid string, uid string, 
 func (r *repository) GetAllByDate(ctx context.Context, date string, fid string, uid string) ([]Product, error) {
 	const q = `
 	SELECT
-		id, name, amount, unit, calories, protein, fat, carbs,
-		basic_calories, basic_protein, basic_fat, basic_carbs,
+		id, name, amount, unit, calories, protein, fat, carbs, fiber, cholesterol,
+		basic_calories, basic_protein, basic_fat, basic_carbs, basic_fiber, basic_cholesterol,
 		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at
 	FROM products
 	WHERE user_id = $1 AND fit_id = $2 AND logged_at = $3
@@ -164,8 +164,8 @@ func (r *repository) GetLikeName(ctx context.Context, name, fid, uid string) ([]
 	pattern := "%" + name + "%"
 	const q = `
 	SELECT DISTINCT ON (p.name)
-		p.id, p.name, p.amount, p.unit, p.calories, p.protein, p.fat, p.carbs,
-		p.basic_calories, p.basic_protein, p.basic_fat, p.basic_carbs,
+		p.id, p.name, p.amount, p.unit, p.calories, p.protein, p.fat, p.carbs, p.fiber, p.cholesterol,
+		p.basic_calories, p.basic_protein, p.basic_fat, p.basic_carbs, p.basic_fiber, p.basic_cholesterol,
 		p.is_water, p.meal_type, p.logged_at, p.user_id, p.fit_id, p.created_at, p.updated_at
 	FROM products p
 	WHERE p.name ILIKE $1 AND p.user_id = $2 AND p.fit_id = $3 AND basic_calories != 0
@@ -190,18 +190,21 @@ func (r *repository) UpdateProduct(ctx context.Context, pu Product, fid, uid str
 		protein = :protein,
 		fat = :fat,
 		carbs = :carbs,
+		fiber = :fiber,
+		cholesterol = :cholesterol,
 		meal_type = :meal_type,
 		updated_at = now()
 	WHERE id = :id AND fit_id = :fit_id AND user_id = :user_id
 	RETURNING
-		id, name, amount, unit, calories, protein, fat, carbs,
-		basic_calories, basic_protein, basic_fat, basic_carbs,
+		id, name, amount, unit, calories, protein, fat, carbs, fiber, cholesterol,
+		basic_calories, basic_protein, basic_fat, basic_carbs, basic_fiber, basic_cholesterol,
 		is_water, meal_type, logged_at, user_id, fit_id, created_at, updated_at;`
 
 	args := map[string]any{
 		"id": pu.Id, "fit_id": fid, "user_id": uid,
 		"name": pu.Name, "amount": pu.Amount, "unit": pu.Unit,
 		"calories": pu.Calories, "protein": pu.Protein, "fat": pu.Fat, "carbs": pu.Carbs,
+		"fiber": pu.Fiber, "cholesterol": pu.Cholesterol,
 		"meal_type": pu.MealType,
 	}
 

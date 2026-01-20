@@ -10,15 +10,17 @@ type FitProfile struct {
 	Weight        int64      `json:"weight" db:"weight"`
 	ActivityLevel float64    `json:"activityLevel" db:"activity_level"`
 	Goal          string     `json:"goal" db:"goal"`
-	Calories      float64    `json:"calories" db:"calories"`
-	Protein       float64    `json:"protein" db:"protein"`
-	Fat           float64    `json:"fat" db:"fat"`
-	Carbs         float64    `json:"carbs" db:"carbs"`
-	WaterLimit    *int64     `json:"waterLimit" db:"water_limit"`
-	UserId        string     `json:"-" db:"user_id"`
-	CreatedAt     time.Time  `json:"-" db:"created_at"`
-	UpdatedAt     time.Time  `json:"-" db:"updated_at"`
-	DeletedAt     *time.Time `json:"-" db:"deleted_at"`
+	Calories         float64    `json:"calories" db:"calories"`
+	Protein          float64    `json:"protein" db:"protein"`
+	Fat              float64    `json:"fat" db:"fat"`
+	Carbs            float64    `json:"carbs" db:"carbs"`
+	FiberTarget      *float64   `json:"fiberTarget" db:"fiber_target"`
+	CholesterolLimit *float64   `json:"cholesterolLimit" db:"cholesterol_limit"`
+	WaterLimit       *int64     `json:"waterLimit" db:"water_limit"`
+	UserId           string     `json:"-" db:"user_id"`
+	CreatedAt        time.Time  `json:"-" db:"created_at"`
+	UpdatedAt        time.Time  `json:"-" db:"updated_at"`
+	DeletedAt        *time.Time `json:"-" db:"deleted_at"`
 }
 
 type FitProfileCreate struct {
@@ -28,10 +30,12 @@ type FitProfileCreate struct {
 	Weight        int64   `json:"weight" db:"weight"`
 	ActivityLevel float64 `json:"activityLevel" db:"activity_level"`
 	Goal          string  `json:"goal" db:"goal"`
-	Calories      float64 `json:"calories" db:"calories"`
-	Protein       float64 `json:"protein" db:"protein"`
-	Fat           float64 `json:"fat" db:"fat"`
-	Carbs         float64 `json:"carbs" db:"carbs"`
-	WaterLimit    int64   `json:"waterLimit" db:"water_limit"`
-	UserId        string  `json:"-" db:"user_id"`
+	Calories         float64  `json:"calories" db:"calories"`
+	Protein          float64  `json:"protein" db:"protein"`
+	Fat              float64  `json:"fat" db:"fat"`
+	Carbs            float64  `json:"carbs" db:"carbs"`
+	FiberTarget      *float64 `json:"fiberTarget" db:"fiber_target"`
+	CholesterolLimit *float64 `json:"cholesterolLimit" db:"cholesterol_limit"`
+	WaterLimit       int64    `json:"waterLimit" db:"water_limit"`
+	UserId           string   `json:"-" db:"user_id"`
 }

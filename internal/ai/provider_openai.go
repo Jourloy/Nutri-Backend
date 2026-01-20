@@ -55,7 +55,13 @@ func (p *OpenAIProvider) AnalyzeImage(ctx context.Context, req ImageAnalysisRequ
 
 Analyze the food image and provide detailed nutritional information.
 If the image is NOT food-related or is inappropriate, respond with: {"violation": true, "reason": "not food-related"}
-Otherwise, estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.
+
+IMPORTANT: The user may provide a product name and/or quantity in their message (e.g., "3 pancakes with condensed milk").
+- If the user specified a name/quantity AND the image matches this description, use the user's name and quantity exactly
+- If the image clearly shows a DIFFERENT product than described (e.g., user says "pancakes" but image shows soup), identify the actual product from the image
+- When in doubt, trust the image over the user's description
+
+Estimate the portion size/weight and provide accurate nutritional values per 100g AND for the estimated total weight.
 
 Response format (JSON):
 {
@@ -68,10 +74,14 @@ Response format (JSON):
   "basicProtein": protein per 100g,
   "basicFat": fat per 100g,
   "basicCarbs": carbs per 100g,
+  "basicFiber": fiber per 100g in grams (or null if unknown),
+  "basicCholesterol": cholesterol per 100g in mg (or null if unknown),
   "calories": total calories for estimated weight,
   "protein": total protein for estimated weight,
   "fat": total fat for estimated weight,
-  "carbs": total carbs for estimated weight
+  "carbs": total carbs for estimated weight,
+  "fiber": total fiber for estimated weight in grams (or null if unknown),
+  "cholesterol": total cholesterol for estimated weight in mg (or null if unknown)
 }`, langInstruction)
 		userMessage = req.UserPrompt
 	} else {
@@ -80,7 +90,13 @@ Response format (JSON):
 
 Analyze the food image and provide detailed nutritional information.
 If the image is NOT food-related or is inappropriate, respond with: {"violation": true, "reason": "not food-related"}
-Otherwise, provide accurate nutritional values per 100g AND for the total weight specified by the user.
+
+IMPORTANT: The user may provide a product name and/or quantity in their message (e.g., "3 pancakes with condensed milk").
+- If the user specified a name/quantity AND the image matches this description, use the user's name and quantity exactly
+- If the image clearly shows a DIFFERENT product than described (e.g., user says "pancakes" but image shows soup), identify the actual product from the image
+- When in doubt, trust the image over the user's description
+
+Provide accurate nutritional values per 100g AND for the total weight specified by the user.
 
 Response format (JSON):
 {
@@ -91,10 +107,14 @@ Response format (JSON):
   "basicProtein": protein per 100g,
   "basicFat": fat per 100g,
   "basicCarbs": carbs per 100g,
+  "basicFiber": fiber per 100g in grams (or null if unknown),
+  "basicCholesterol": cholesterol per 100g in mg (or null if unknown),
   "calories": total calories for specified weight,
   "protein": total protein for specified weight,
   "fat": total fat for specified weight,
-  "carbs": total carbs for specified weight
+  "carbs": total carbs for specified weight,
+  "fiber": total fiber for specified weight in grams (or null if unknown),
+  "cholesterol": total cholesterol for specified weight in mg (or null if unknown)
 }`, langInstruction)
 		userMessage = fmt.Sprintf("%s\n\nTotal weight: %.1fg", req.UserPrompt, *req.TotalWeight)
 	}
@@ -165,10 +185,14 @@ Response format (JSON):
 		BasicProtein:     result.BasicProtein,
 		BasicFat:         result.BasicFat,
 		BasicCarbs:       result.BasicCarbs,
+		BasicFiber:       result.BasicFiber,
+		BasicCholesterol: result.BasicCholesterol,
 		Calories:         result.Calories,
 		Protein:          result.Protein,
 		Fat:              result.Fat,
 		Carbs:            result.Carbs,
+		Fiber:            result.Fiber,
+		Cholesterol:      result.Cholesterol,
 		EstimatedWeight:  result.EstimatedWeight,
 		WeightUnit:       result.WeightUnit,
 		PromptTokens:     resp.Usage.PromptTokens,
@@ -197,10 +221,14 @@ Response format (JSON):
   "basicProtein": protein per 100g,
   "basicFat": fat per 100g,
   "basicCarbs": carbs per 100g,
+  "basicFiber": fiber per 100g in grams (or null if unknown),
+  "basicCholesterol": cholesterol per 100g in mg (or null if unknown),
   "calories": total calories for specified weight,
   "protein": total protein for specified weight,
   "fat": total fat for specified weight,
-  "carbs": total carbs for specified weight
+  "carbs": total carbs for specified weight,
+  "fiber": total fiber for specified weight in grams (or null if unknown),
+  "cholesterol": total cholesterol for specified weight in mg (or null if unknown)
 }`, langInstruction)
 
 	userMessage := fmt.Sprintf("Food name: %s\nDescription: %s\nTotal weight: %.1fg\n\nProvide nutritional information for this food.", req.FoodName, req.FoodDescription, req.TotalWeight)
@@ -249,10 +277,14 @@ Response format (JSON):
 		BasicProtein:     result.BasicProtein,
 		BasicFat:         result.BasicFat,
 		BasicCarbs:       result.BasicCarbs,
+		BasicFiber:       result.BasicFiber,
+		BasicCholesterol: result.BasicCholesterol,
 		Calories:         result.Calories,
 		Protein:          result.Protein,
 		Fat:              result.Fat,
 		Carbs:            result.Carbs,
+		Fiber:            result.Fiber,
+		Cholesterol:      result.Cholesterol,
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		IsViolation:      false,

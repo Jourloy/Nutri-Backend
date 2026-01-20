@@ -136,13 +136,7 @@ func (r *repository) GetOrCreateUserLimit(ctx context.Context, userId, requestTy
 
 	dateStr := limitDate.Format("2006-01-02")
 
-	// Try to get existing
-	existing, err := r.GetUserLimit(ctx, userId, requestType, limitDate)
-	if err == nil && existing != nil {
-		return existing, nil
-	}
-
-	// Create new limit
+	// Always upsert to ensure limits are updated when subscription changes
 	const q = `
 		INSERT INTO ai_user_limits (user_id, limit_date, request_type, requests_count, max_requests, subscription_tier)
 		VALUES ($1, $2, $3, 0, $4, $5)

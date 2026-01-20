@@ -27,7 +27,7 @@ func NewRepository() Repository {
 // единый список колонок — без SELECT *
 const fitColumns = `
 	id, age, gender, height, weight, activity_level, goal,
-	calories, protein, fat, carbs, water_limit,
+	calories, protein, fat, carbs, fiber_target, cholesterol_limit, water_limit,
 	user_id, created_at, updated_at, deleted_at
 `
 
@@ -35,26 +35,28 @@ func (r *repository) CreateFitProfile(ctx context.Context, fc FitProfileCreate) 
 	const q = `
 	INSERT INTO fit_profiles (
 		age, gender, height, weight, activity_level, goal,
-		calories, protein, fat, carbs, water_limit, user_id
+		calories, protein, fat, carbs, fiber_target, cholesterol_limit, water_limit, user_id
 	) VALUES (
 		:age, :gender, :height, :weight, :activity_level, :goal,
-		:calories, :protein, :fat, :carbs, :water_limit, :user_id
+		:calories, :protein, :fat, :carbs, :fiber_target, :cholesterol_limit, :water_limit, :user_id
 	)
 	RETURNING ` + fitColumns + `;`
 
 	args := map[string]any{
-		"age":            fc.Age,
-		"gender":         fc.Gender,
-		"height":         fc.Height,
-		"weight":         fc.Weight,
-		"activity_level": fc.ActivityLevel,
-		"goal":           fc.Goal,
-		"calories":       fc.Calories,
-		"protein":        fc.Protein,
-		"fat":            fc.Fat,
-		"carbs":          fc.Carbs,
-		"water_limit":    fc.WaterLimit,
-		"user_id":        fc.UserId,
+		"age":               fc.Age,
+		"gender":            fc.Gender,
+		"height":            fc.Height,
+		"weight":            fc.Weight,
+		"activity_level":    fc.ActivityLevel,
+		"goal":              fc.Goal,
+		"calories":          fc.Calories,
+		"protein":           fc.Protein,
+		"fat":               fc.Fat,
+		"carbs":             fc.Carbs,
+		"fiber_target":      fc.FiberTarget,
+		"cholesterol_limit": fc.CholesterolLimit,
+		"water_limit":       fc.WaterLimit,
+		"user_id":           fc.UserId,
 	}
 
 	rows, err := r.db.NamedQueryContext(ctx, q, args)
@@ -87,25 +89,29 @@ func (r *repository) UpdateFitProfile(ctx context.Context, fu FitProfileCreate, 
 		protein = :protein,
 		fat = :fat,
 		carbs = :carbs,
+		fiber_target = :fiber_target,
+		cholesterol_limit = :cholesterol_limit,
 		water_limit = :water_limit,
 		updated_at = now()
 	WHERE id = :id AND user_id = :user_id
 	RETURNING ` + fitColumns + `;`
 
 	args := map[string]any{
-		"id":             fid,
-		"user_id":        uid,
-		"age":            fu.Age,
-		"gender":         fu.Gender,
-		"height":         fu.Height,
-		"weight":         fu.Weight,
-		"activity_level": fu.ActivityLevel,
-		"goal":           fu.Goal,
-		"calories":       fu.Calories,
-		"protein":        fu.Protein,
-		"fat":            fu.Fat,
-		"carbs":          fu.Carbs,
-		"water_limit":    fu.WaterLimit,
+		"id":                fid,
+		"user_id":           uid,
+		"age":               fu.Age,
+		"gender":            fu.Gender,
+		"height":            fu.Height,
+		"weight":            fu.Weight,
+		"activity_level":    fu.ActivityLevel,
+		"goal":              fu.Goal,
+		"calories":          fu.Calories,
+		"protein":           fu.Protein,
+		"fat":               fu.Fat,
+		"carbs":             fu.Carbs,
+		"fiber_target":      fu.FiberTarget,
+		"cholesterol_limit": fu.CholesterolLimit,
+		"water_limit":       fu.WaterLimit,
 	}
 
 	rows, err := r.db.NamedQueryContext(ctx, q, args)

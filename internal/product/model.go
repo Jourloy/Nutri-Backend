@@ -7,14 +7,18 @@ type Product struct {
 	Name          string    `json:"name" db:"name"`
 	Amount        int64     `json:"amount" db:"amount"`
 	Unit          string    `json:"unit" db:"unit"`
-	Calories      float64   `json:"calories" db:"calories"`
-	Protein       float64   `json:"protein" db:"protein"`
-	Fat           float64   `json:"fat" db:"fat"`
-	Carbs         float64   `json:"carbs" db:"carbs"`
-	BasicCalories float64   `json:"basicCalories" db:"basic_calories"`
-	BasicProtein  float64   `json:"basicProtein" db:"basic_protein"`
-	BasicFat      float64   `json:"basicFat" db:"basic_fat"`
-	BasicCarbs    float64   `json:"basicCarbs" db:"basic_carbs"`
+	Calories         float64  `json:"calories" db:"calories"`
+	Protein          float64  `json:"protein" db:"protein"`
+	Fat              float64  `json:"fat" db:"fat"`
+	Carbs            float64  `json:"carbs" db:"carbs"`
+	Fiber            *float64 `json:"fiber" db:"fiber"`
+	Cholesterol      *float64 `json:"cholesterol" db:"cholesterol"`
+	BasicCalories    float64  `json:"basicCalories" db:"basic_calories"`
+	BasicProtein     float64  `json:"basicProtein" db:"basic_protein"`
+	BasicFat         float64  `json:"basicFat" db:"basic_fat"`
+	BasicCarbs       float64  `json:"basicCarbs" db:"basic_carbs"`
+	BasicFiber       *float64 `json:"basicFiber" db:"basic_fiber"`
+	BasicCholesterol *float64 `json:"basicCholesterol" db:"basic_cholesterol"`
 	IsWater       bool      `json:"isWater" db:"is_water"`
 	MealType      *string   `json:"mealType,omitempty" db:"meal_type"`
 	LoggedAt      time.Time `json:"loggedAt" db:"logged_at"`
@@ -28,17 +32,21 @@ type ProductCreate struct {
 	Name          string     `json:"name" db:"name"`
 	Amount        int64      `json:"amount" db:"amount"`
 	Unit          string     `json:"unit" db:"unit"`
-	Calories      float64    `json:"calories" db:"calories"`
-	Protein       float64    `json:"protein" db:"protein"`
-	Fat           float64    `json:"fat" db:"fat"`
-	Carbs         float64    `json:"carbs" db:"carbs"`
-	BasicCalories float64    `json:"basicCalories" db:"basic_calories"`
-	BasicProtein  float64    `json:"basicProtein" db:"basic_protein"`
-	BasicFat      float64    `json:"basicFat" db:"basic_fat"`
-	BasicCarbs    float64    `json:"basicCarbs" db:"basic_carbs"`
-	IsWater       bool       `json:"isWater" db:"is_water"`
-	MealType      *string    `json:"mealType,omitempty" db:"meal_type"`
-	LoggedAt      *time.Time `json:"loggedAt,omitempty" db:"logged_at"`
-	UserId        string     `json:"-" db:"user_id"`
-	FitId         string     `json:"-" db:"fit_id"`
+	Calories         float64    `json:"calories" db:"calories"`
+	Protein          float64    `json:"protein" db:"protein"`
+	Fat              float64    `json:"fat" db:"fat"`
+	Carbs            float64    `json:"carbs" db:"carbs"`
+	Fiber            *float64   `json:"fiber" db:"fiber"`
+	Cholesterol      *float64   `json:"cholesterol" db:"cholesterol"`
+	BasicCalories    float64    `json:"basicCalories" db:"basic_calories"`
+	BasicProtein     float64    `json:"basicProtein" db:"basic_protein"`
+	BasicFat         float64    `json:"basicFat" db:"basic_fat"`
+	BasicCarbs       float64    `json:"basicCarbs" db:"basic_carbs"`
+	BasicFiber       *float64   `json:"basicFiber" db:"basic_fiber"`
+	BasicCholesterol *float64   `json:"basicCholesterol" db:"basic_cholesterol"`
+	IsWater          bool       `json:"isWater" db:"is_water"`
+	MealType         *string    `json:"mealType,omitempty" db:"meal_type"`
+	LoggedAt         *time.Time `json:"loggedAt,omitempty" db:"logged_at"`
+	UserId           string     `json:"-" db:"user_id"`
+	FitId            string     `json:"-" db:"fit_id"`
 }

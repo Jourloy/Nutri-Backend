@@ -43,6 +43,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		// Food analysis
 		r.Post("/analyze-food", c.AnalyzeFoodImage)
 		r.Post("/analyze-food-text", c.AnalyzeFoodByText)
+		r.Post("/analyze-nutrients", c.AnalyzeNutrients)
 		r.Get("/analysis-history", c.GetAnalysisHistory)
 		r.Get("/analysis/{id}", c.GetAnalysisById)
 
@@ -53,6 +54,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("╔═════ AI")
 	logger.Info("║   POST /analyze-food (multipart: image, totalWeight, userPrompt)")
 	logger.Info("║   POST /analyze-food-text (json: foodName, foodDescription, totalWeight, language)")
+	logger.Info("║   POST /analyze-nutrients (json: foodName, totalWeight, language)")
 	logger.Info("║    GET /analysis-history?limit=10")
 	logger.Info("║    GET /analysis/{id}")
 	logger.Info("║    GET /limit-status?type=food_analysis")
@@ -247,6 +249,74 @@ func (c *Controller) GetAnalysisById(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(log)
+}
+
+// AnalyzeNutrients returns only fiber and cholesterol for a food item
+func (c *Controller) AnalyzeNutrients(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse JSON body
+	var req struct {
+		FoodName    string  `json:"foodName"`
+		TotalWeight float64 `json:"totalWeight"`
+		Language    string  `json:"language"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.FoodName == "" {
+		http.Error(w, "foodName is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.TotalWeight <= 0 {
+		http.Error(w, "totalWeight must be greater than 0", http.StatusBadRequest)
+		return
+	}
+
+	// Default language
+	if req.Language == "" {
+		req.Language = "en"
+	}
+
+	// Call service (reuse text analysis)
+	result, err := c.service.AnalyzeFoodByText(
+		context.Background(),
+		u.Id,
+		req.FoodName,
+		"",
+		req.TotalWeight,
+		req.Language,
+	)
+	if err != nil {
+		logger.Error("nutrients analysis failed", "userId", u.Id, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Return only fiber and cholesterol fields
+	response := struct {
+		BasicFiber       *float64 `json:"basicFiber"`
+		BasicCholesterol *float64 `json:"basicCholesterol"`
+		Fiber            *float64 `json:"fiber"`
+		Cholesterol      *float64 `json:"cholesterol"`
+	}{
+		BasicFiber:       result.BasicFiber,
+		BasicCholesterol: result.BasicCholesterol,
+		Fiber:            result.Fiber,
+		Cholesterol:      result.Cholesterol,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // GetLimitStatus returns user's current limit status
