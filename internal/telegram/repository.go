@@ -12,9 +12,12 @@ type Repository interface {
     CreateOrGetTicket(ctx context.Context, userId string) (*TelegramProfile, error)
     LinkByToken(ctx context.Context, in LinkRequest) (*TelegramProfile, error)
     GetByUserId(ctx context.Context, userId string) (*TelegramProfile, error)
+    GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error)
     GetPublicByUserId(ctx context.Context, userId string) (*TelegramPublic, error)
     DeleteByUserId(ctx context.Context, userId string) error
     UpdateNotifyByUserId(ctx context.Context, userId string, upd NotifyUpdate) (*TelegramProfile, error)
+    GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error)
+    UpdateLastDailyReminder(ctx context.Context, telegramId string) error
 }
 
 type repository struct {
@@ -118,4 +121,51 @@ func (r *repository) UpdateNotifyByUserId(ctx context.Context, userId string, up
         return nil, err
     }
     return &tp, nil
+}
+
+// GetByTelegramId returns telegram profile by telegram_id
+func (r *repository) GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error) {
+    const q = `SELECT ` + columns + ` FROM telegram_profiles WHERE telegram_id = $1 LIMIT 1;`
+    var tp TelegramProfile
+    if err := r.db.GetContext(ctx, &tp, q, telegramId); err != nil {
+        return nil, err
+    }
+    return &tp, nil
+}
+
+// GetAllForDailyNotify returns all profiles with notify_daily=true and telegram_id set
+func (r *repository) GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error) {
+    const q = `
+        SELECT
+            tp.id, tp.token, tp.telegram_id, tp.telegram_username, tp.telegram_avatar,
+            tp.notify_daily, tp.notify_story, tp.user_id, tp.connected_at,
+            tp.created_at, tp.updated_at, tp.last_daily_reminder_at,
+            u.timezone as user_timezone, u.locale as user_locale
+        FROM telegram_profiles tp
+        JOIN users u ON tp.user_id = u.id
+        WHERE tp.notify_daily = true
+          AND tp.telegram_id IS NOT NULL
+          AND u.deleted_at IS NULL;`
+
+    var profiles []TelegramProfileWithUser
+    if err := r.db.SelectContext(ctx, &profiles, q); err != nil {
+        return nil, err
+    }
+    return profiles, nil
+}
+
+// UpdateLastDailyReminder updates the last_daily_reminder_at timestamp
+func (r *repository) UpdateLastDailyReminder(ctx context.Context, telegramId string) error {
+    const q = `
+        UPDATE telegram_profiles
+        SET last_daily_reminder_at = NOW(),
+            updated_at = NOW()
+        WHERE telegram_id = $1
+        RETURNING id;`
+
+    var id int64
+    if err := r.db.GetContext(ctx, &id, q, telegramId); err != nil {
+        return err
+    }
+    return nil
 }

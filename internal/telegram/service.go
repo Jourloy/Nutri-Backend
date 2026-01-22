@@ -6,9 +6,12 @@ type Service interface {
     CreateTicket(ctx context.Context, userId string) (*TelegramProfile, error)
     LinkByToken(ctx context.Context, in LinkRequest) (*TelegramProfile, error)
     GetByUserId(ctx context.Context, userId string) (*TelegramProfile, error)
+    GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error)
     GetPublicByUserId(ctx context.Context, userId string) (*TelegramPublic, error)
     DeleteByUserId(ctx context.Context, userId string) error
     UpdateNotifyByUserId(ctx context.Context, userId string, upd NotifyUpdate) (*TelegramProfile, error)
+    GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error)
+    UpdateLastDailyReminder(ctx context.Context, telegramId string) error
 }
 
 type service struct {
@@ -41,4 +44,16 @@ func (s *service) DeleteByUserId(ctx context.Context, userId string) error {
 
 func (s *service) UpdateNotifyByUserId(ctx context.Context, userId string, upd NotifyUpdate) (*TelegramProfile, error) {
     return s.repo.UpdateNotifyByUserId(ctx, userId, upd)
+}
+
+func (s *service) GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error) {
+    return s.repo.GetByTelegramId(ctx, telegramId)
+}
+
+func (s *service) GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error) {
+    return s.repo.GetAllForDailyNotify(ctx)
+}
+
+func (s *service) UpdateLastDailyReminder(ctx context.Context, telegramId string) error {
+    return s.repo.UpdateLastDailyReminder(ctx, telegramId)
 }

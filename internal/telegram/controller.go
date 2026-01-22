@@ -11,8 +11,8 @@ import (
     "github.com/charmbracelet/log"
     "github.com/go-chi/chi/v5"
 
-    "github.com/jourloy/nutri-backend/internal/auth"
     "github.com/jourloy/nutri-backend/internal/lib"
+    "github.com/jourloy/nutri-backend/internal/user"
 )
 
 var (
@@ -61,7 +61,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 
 // CreateTicket creates a telegram profile (if not exists) and returns token.
 func (c *Controller) CreateTicket(w http.ResponseWriter, r *http.Request) {
-    u, ok := auth.UserFromContext(r.Context())
+    u, ok := user.UserFromContext(r.Context())
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return
@@ -106,7 +106,7 @@ func (c *Controller) LinkByToken(w http.ResponseWriter, r *http.Request) {
 
 // GetMe returns current user's telegram profile if exists.
 func (c *Controller) GetMe(w http.ResponseWriter, r *http.Request) {
-    u, ok := auth.UserFromContext(r.Context())
+    u, ok := user.UserFromContext(r.Context())
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return
@@ -197,7 +197,7 @@ func (c *Controller) GetAvatarByUserId(w http.ResponseWriter, r *http.Request) {
 
 // DeleteMe removes current user's telegram profile.
 func (c *Controller) DeleteMe(w http.ResponseWriter, r *http.Request) {
-    u, ok := auth.UserFromContext(r.Context())
+    u, ok := user.UserFromContext(r.Context())
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return
@@ -214,7 +214,7 @@ func (c *Controller) DeleteMe(w http.ResponseWriter, r *http.Request) {
 
 // UpdateNotify allows partial editing of notify_* flags for current user's telegram profile.
 func (c *Controller) UpdateNotify(w http.ResponseWriter, r *http.Request) {
-    u, ok := auth.UserFromContext(r.Context())
+    u, ok := user.UserFromContext(r.Context())
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return

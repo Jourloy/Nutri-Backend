@@ -28,6 +28,7 @@ type Service interface {
 	VerifyCode(ctx context.Context, userId string, code string) (*VerificationCode, error)
 	ResendVerificationCode(ctx context.Context, userId string) error
 	SetUserLocaleGetter(getter UserLocaleGetter)
+	SendRawEmail(ctx context.Context, to string, subject string, body string) error
 }
 
 type service struct {
@@ -169,4 +170,9 @@ func (s *service) ResendVerificationCode(ctx context.Context, userId string) err
 
 	// Отправляем новый код
 	return s.SendVerificationCode(ctx, userId, vc.Email)
+}
+
+// SendRawEmail sends a plain text email
+func (s *service) SendRawEmail(ctx context.Context, to string, subject string, body string) error {
+	return s.sendEmailViaMailgun(to, subject, body)
 }

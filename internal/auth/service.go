@@ -1,19 +1,24 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/argon2"
 
+	"github.com/jourloy/nutri-backend/internal/email"
 	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/user"
 )
 
@@ -42,22 +47,35 @@ type Service interface {
 	Delete(id string) error
 	UpdateLocale(ctx context.Context, uid string, locale string) (*user.User, error)
 	CheckUsernameAvailability(username string) (bool, error)
+	// Password reset
+	RequestPasswordReset(ctx context.Context, username string) (*PasswordResetResponse, error)
+	ValidateResetToken(ctx context.Context, token string) (bool, error)
+	ResetPassword(ctx context.Context, token string, newPassword string) error
 }
 
 type service struct {
-	repo        Repository
-	userService user.Service
-	jwtCfg      Config
+	repo            Repository
+	userService     user.Service
+	telegramService telegram.Service
+	emailService    email.Service
+	jwtCfg          Config
 }
 
 func NewService(repo Repository) Service {
-	return &service{repo: repo, userService: user.NewService(), jwtCfg: Config{
-		Secret:     []byte(lib.Config.JWTSecret),
-		Issuer:     "nutri-api",
-		Audience:   "nutri-web",
-		AccessTTL:  30 * time.Hour,
-		RefreshTTL: 30 * 24 * time.Hour,
-	}}
+	emailSvc := email.NewService()
+	return &service{
+		repo:            repo,
+		userService:     user.NewService(),
+		telegramService: telegram.NewService(),
+		emailService:    emailSvc,
+		jwtCfg: Config{
+			Secret:     []byte(lib.Config.JWTSecret),
+			Issuer:     "nutri-api",
+			Audience:   "nutri-web",
+			AccessTTL:  30 * time.Hour,
+			RefreshTTL: 30 * 24 * time.Hour,
+		},
+	}
 }
 
 func (s *service) makeToken(sub string, ttl time.Duration, tokenVersion int64, tokenType string) (string, error) {
@@ -255,4 +273,259 @@ func (s *service) CheckUsernameAvailability(username string) (bool, error) {
 	}
 	// если пользователь не найден, username доступен
 	return u == nil, nil
+}
+
+// RequestPasswordReset initiates password reset process
+func (s *service) RequestPasswordReset(ctx context.Context, username string) (*PasswordResetResponse, error) {
+	// Find user by username
+	u, err := s.userService.GetUserByUsername(strings.ToLower(username))
+	if err != nil {
+		return nil, err
+	}
+	if u == nil {
+		return nil, errors.New("user not found")
+	}
+
+	// Check if user has Telegram linked
+	tgProfile, _ := s.telegramService.GetByUserId(ctx, u.Id)
+	if tgProfile != nil && tgProfile.TelegramId != nil && *tgProfile.TelegramId != "" {
+		// Send via Telegram
+		token, err := s.repo.CreatePasswordResetToken(ctx, u.Id, "telegram")
+		if err != nil {
+			return nil, err
+		}
+
+		resetURL := fmt.Sprintf("%s/reset-password?token=%s", lib.Config.FrontURL, token.Token)
+		err = s.sendTelegramPasswordReset(*tgProfile.TelegramId, resetURL, u.Locale)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send telegram message: %w", err)
+		}
+
+		return &PasswordResetResponse{
+			Method:  "telegram",
+			Message: "Password reset link sent to your Telegram",
+			Sent:    true,
+		}, nil
+	}
+
+	// Check if user has email
+	if u.Email != nil && *u.Email != "" {
+		// Check rate limit (max 2 per day)
+		count, err := s.repo.GetPasswordResetEmailCountToday(ctx, u.Id)
+		if err != nil {
+			return nil, err
+		}
+		if count >= 2 {
+			return &PasswordResetResponse{
+				Method:  "email",
+				Message: "Email limit reached. Please try again tomorrow or link your Telegram account.",
+				Sent:    false,
+			}, nil
+		}
+
+		// Send via Email
+		token, err := s.repo.CreatePasswordResetToken(ctx, u.Id, "email")
+		if err != nil {
+			return nil, err
+		}
+
+		resetURL := fmt.Sprintf("%s/reset-password?token=%s", lib.Config.FrontURL, token.Token)
+		err = s.sendEmailPasswordReset(*u.Email, resetURL, u.Locale)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send email: %w", err)
+		}
+
+		// Increment email count
+		if err := s.repo.IncrementPasswordResetEmailCount(ctx, u.Id); err != nil {
+			// Log but don't fail
+		}
+
+		// Mask email for response
+		maskedEmail := maskEmail(*u.Email)
+
+		return &PasswordResetResponse{
+			Method:  "email",
+			Message: "Password reset link sent to your email",
+			Sent:    true,
+			Email:   maskedEmail,
+		}, nil
+	}
+
+	return &PasswordResetResponse{
+		Method:  "none",
+		Message: "No recovery method available. Please contact support.",
+		Sent:    false,
+	}, nil
+}
+
+// ValidateResetToken checks if a token is valid
+func (s *service) ValidateResetToken(ctx context.Context, token string) (bool, error) {
+	prt, err := s.repo.GetPasswordResetToken(ctx, token)
+	if err != nil {
+		return false, nil
+	}
+
+	// Check if expired
+	if time.Now().After(prt.ExpiresAt) {
+		return false, nil
+	}
+
+	// Check if already used
+	if prt.UsedAt != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// ResetPassword sets a new password using the reset token
+func (s *service) ResetPassword(ctx context.Context, token string, newPassword string) error {
+	// Validate token
+	prt, err := s.repo.GetPasswordResetToken(ctx, token)
+	if err != nil {
+		return errors.New("invalid token")
+	}
+
+	if time.Now().After(prt.ExpiresAt) {
+		return errors.New("token expired")
+	}
+
+	if prt.UsedAt != nil {
+		return errors.New("token already used")
+	}
+
+	// Hash new password
+	hash, err := s.hashPasswordArgon2id(newPassword)
+	if err != nil {
+		return err
+	}
+
+	// Update password in user repository
+	if err := s.updateUserPassword(ctx, prt.UserId, hash); err != nil {
+		return err
+	}
+
+	// Mark token as used
+	if err := s.repo.MarkPasswordResetTokenUsed(ctx, prt.Id); err != nil {
+		// Log but don't fail
+	}
+
+	// Invalidate all existing tokens (force re-login)
+	if err := s.userService.InvalidateTokens(ctx, prt.UserId); err != nil {
+		// Log but don't fail
+	}
+
+	// Clean up expired tokens asynchronously
+	go s.repo.DeleteExpiredPasswordResetTokens(context.Background())
+
+	return nil
+}
+
+// updateUserPassword updates user's password hash
+func (s *service) updateUserPassword(ctx context.Context, userId string, passwordHash string) error {
+	// We need to add this method to user repository
+	return user.NewRepository().UpdatePasswordHash(ctx, userId, passwordHash)
+}
+
+// sendTelegramPasswordReset sends password reset link via Telegram Bot API
+func (s *service) sendTelegramPasswordReset(telegramId string, resetURL string, locale *string) error {
+	if lib.Config.TelegramToken == "" {
+		return errors.New("telegram token not configured")
+	}
+
+	lang := "ru"
+	if locale != nil {
+		lang = *locale
+	}
+
+	var message string
+	if lang == "en" {
+		message = fmt.Sprintf("🔐 *Password Reset*\n\nClick the link below to reset your password:\n\n[Reset Password](%s)\n\n_This link is valid for 1 hour._", resetURL)
+	} else {
+		message = fmt.Sprintf("🔐 *Сброс пароля*\n\nНажмите на ссылку ниже, чтобы сбросить пароль:\n\n[Сбросить пароль](%s)\n\n_Ссылка действительна 1 час._", resetURL)
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":    telegramId,
+		"text":       message,
+		"parse_mode": "Markdown",
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", lib.Config.TelegramToken)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram API returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// sendEmailPasswordReset sends password reset link via email
+func (s *service) sendEmailPasswordReset(emailAddr string, resetURL string, locale *string) error {
+	lang := "ru"
+	if locale != nil {
+		lang = *locale
+	}
+
+	var subject, body string
+	if lang == "en" {
+		subject = "Nutri - Password Reset"
+		body = fmt.Sprintf(`Hello!
+
+You requested a password reset for your Nutri account.
+
+Click the link below to reset your password:
+%s
+
+This link is valid for 1 hour.
+
+If you didn't request this, please ignore this email.
+
+Best regards,
+Nutri Team`, resetURL)
+	} else {
+		subject = "Nutri - Сброс пароля"
+		body = fmt.Sprintf(`Привет!
+
+Вы запросили сброс пароля для вашего аккаунта Nutri.
+
+Перейдите по ссылке ниже, чтобы сбросить пароль:
+%s
+
+Ссылка действительна 1 час.
+
+Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
+
+С уважением,
+Команда Nutri`, resetURL)
+	}
+
+	return s.emailService.SendRawEmail(context.Background(), emailAddr, subject, body)
+}
+
+// maskEmail masks email for privacy (e.g., j***@gmail.com)
+func maskEmail(emailStr string) string {
+	parts := strings.Split(emailStr, "@")
+	if len(parts) != 2 {
+		return "***"
+	}
+
+	local := parts[0]
+	domain := parts[1]
+
+	if len(local) <= 1 {
+		return local + "***@" + domain
+	}
+
+	return string(local[0]) + "***@" + domain
 }

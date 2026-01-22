@@ -36,6 +36,8 @@ type conf struct {
 	MinioSecretKey   string
 	MinioBucketName  string
 	MinioUseSSL      bool
+	// Service-to-service auth
+	ServiceToken string // Token for internal service communication (Telegram bot, etc.)
 }
 
 type contextKeys struct {
@@ -228,6 +230,13 @@ func ParseENV() error {
 		Config.MinioUseSSL = val
 	} else {
 		Config.MinioUseSSL = true // Default to true for security
+	}
+
+	// Service token for internal communication (optional, but required for /internal endpoints)
+	if env, exist := os.LookupEnv("SERVICE_TOKEN"); exist {
+		Config.ServiceToken = env
+	} else {
+		logger.Warn("SERVICE_TOKEN not set, internal endpoints will be disabled")
 	}
 
 	return nil

@@ -23,6 +23,7 @@ type Repository interface {
 	UpdateLocale(ctx context.Context, uid string, locale string) (*User, error)
 	UpdateTimezone(ctx context.Context, uid string, timezone string) (*User, error)
 	GetUserStats(ctx context.Context, uid string) (*UserStats, error)
+	UpdatePasswordHash(ctx context.Context, uid string, passwordHash string) error
 }
 
 type repository struct {
@@ -367,6 +368,22 @@ func (r *repository) GetUserStats(ctx context.Context, uid string) (*UserStats, 
 	stats.CurrentStreak = r.calculateCurrentStreak(ctx, uid, tz)
 
 	return &stats, nil
+}
+
+// UpdatePasswordHash updates user's password hash
+func (r *repository) UpdatePasswordHash(ctx context.Context, uid string, passwordHash string) error {
+	const q = `
+		UPDATE users
+		SET password_hash = $2,
+			updated_at = now()
+		WHERE id = $1
+		RETURNING id;`
+
+	var id string
+	if err := r.db.GetContext(ctx, &id, q, uid, passwordHash); err != nil {
+		return err
+	}
+	return nil
 }
 
 // calculateCurrentStreak calculates the current consecutive days with at least 1 product

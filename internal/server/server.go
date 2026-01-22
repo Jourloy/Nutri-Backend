@@ -24,6 +24,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/feature"
 	"github.com/jourloy/nutri-backend/internal/feedback"
 	"github.com/jourloy/nutri-backend/internal/fit"
+	"github.com/jourloy/nutri-backend/internal/internal_api"
 	"github.com/jourloy/nutri-backend/internal/middlewares"
 	"github.com/jourloy/nutri-backend/internal/news"
 	"github.com/jourloy/nutri-backend/internal/order"
@@ -117,6 +118,16 @@ func Start() error {
 			admin.NewController().RegisterRoutes(r)
 			promo.NewController().RegisterAdminRoutes(r)
 			ticket.NewController().RegisterAdminRoutes(r)
+		})
+
+		// Internal API routes (requires service token)
+		r.Group(func(r chi.Router) {
+			r.Use(middlewares.ServiceAuth)
+			if internalCtrl, err := internal_api.NewController(); err != nil {
+				logger.Warn("Internal API controller disabled", "error", err)
+			} else {
+				internalCtrl.RegisterRoutes(r)
+			}
 		})
 	})
 

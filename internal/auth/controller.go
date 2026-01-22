@@ -39,6 +39,10 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Patch("/locale", c.UpdateLocale)
 		r.Delete("/me", c.DeleteMe)
 		r.Get("/check-username/{username}", c.CheckUsername)
+		// Password reset
+		r.Post("/request-password-reset", c.RequestPasswordReset)
+		r.Post("/reset-password", c.ResetPassword)
+		r.Get("/validate-reset-token", c.ValidateResetToken)
 	})
 
 	logger.Info("╔═════ Auth")
@@ -51,6 +55,9 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   PATCH /locale")
 	logger.Info("║ DELETE /me")
 	logger.Info("║    GET /check-username/{username}")
+	logger.Info("║   POST /request-password-reset")
+	logger.Info("║   POST /reset-password")
+	logger.Info("║    GET /validate-reset-token")
 	logger.Info("╚═════")
 }
 
@@ -257,4 +264,87 @@ func (c *Controller) CheckUsername(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]bool{"available": available})
+}
+
+func (c *Controller) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var req RequestPasswordResetData
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Username == "" {
+		http.Error(w, "username is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := c.service.RequestPasswordReset(r.Context(), req.Username)
+	if err != nil {
+		// Don't reveal if user exists or not
+		logger.Warn("password reset request failed", "username", req.Username, "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(&PasswordResetResponse{
+			Method:  "unknown",
+			Message: "If the account exists, a reset link will be sent",
+			Sent:    true,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (c *Controller) ValidateResetToken(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "token is required", http.StatusBadRequest)
+		return
+	}
+
+	valid, err := c.service.ValidateResetToken(r.Context(), token)
+	if err != nil {
+		logger.Error("Error validating reset token", "error", err)
+		http.Error(w, "invalid token", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]bool{"valid": valid})
+}
+
+func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req ResetPasswordData
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Token == "" {
+		http.Error(w, "token is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.NewPassword == "" {
+		http.Error(w, "newPassword is required", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		http.Error(w, "password must be at least 6 characters", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.service.ResetPassword(r.Context(), req.Token, req.NewPassword); err != nil {
+		logger.Warn("password reset failed", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
