@@ -31,6 +31,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/plan"
 	"github.com/jourloy/nutri-backend/internal/product"
 	"github.com/jourloy/nutri-backend/internal/promo"
+	"github.com/jourloy/nutri-backend/internal/recipe"
 	"github.com/jourloy/nutri-backend/internal/recommendation"
 	"github.com/jourloy/nutri-backend/internal/subscription"
 	"github.com/jourloy/nutri-backend/internal/telegram"
@@ -110,6 +111,12 @@ func Start() error {
 			logger.Warn("Blog controller disabled", "error", err)
 		} else {
 			blogCtrl.RegisterRoutes(r)
+		}
+
+		if recipeCtrl, err := recipe.NewController(); err != nil {
+			logger.Warn("Recipe controller disabled", "error", err)
+		} else {
+			recipeCtrl.RegisterRoutes(r)
 		}
 
 		// Admin routes (requires admin middleware)

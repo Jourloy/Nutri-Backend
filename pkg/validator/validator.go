@@ -57,3 +57,21 @@ func HasMinLength(s string, minLen int) bool {
 func HasMaxLength(s string, maxLen int) bool {
 	return len(s) <= maxLen
 }
+
+// UsernameRX validates username format: 3-32 chars, Latin letters, numbers, underscore and hyphen
+var UsernameRX = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
+
+// ValidateUsername checks if username meets requirements
+// Returns empty string if valid, otherwise returns error message
+func ValidateUsername(username string) string {
+	if len(username) < 3 {
+		return "username must be at least 3 characters"
+	}
+	if len(username) > 32 {
+		return "username cannot exceed 32 characters"
+	}
+	if !UsernameRX.MatchString(username) {
+		return "username can only contain Latin letters, numbers, underscore and hyphen"
+	}
+	return ""
+}

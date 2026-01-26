@@ -20,6 +20,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/lib"
 	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/user"
+	"github.com/jourloy/nutri-backend/pkg/validator"
 )
 
 const (
@@ -159,6 +160,11 @@ func (s *service) verifyPasswordArgon2id(stored, password string) (bool, error) 
 }
 
 func (s *service) Register(body RegisterData) (*LoginResponse, error) {
+	// Validate username format
+	if errMsg := validator.ValidateUsername(body.Username); errMsg != "" {
+		return nil, errors.New(errMsg)
+	}
+
 	hash, err := s.hashPasswordArgon2id(body.Password)
 	if err != nil {
 		return nil, err
