@@ -34,6 +34,7 @@ import (
 	"github.com/jourloy/nutri-backend/internal/recipe"
 	"github.com/jourloy/nutri-backend/internal/recommendation"
 	"github.com/jourloy/nutri-backend/internal/subscription"
+	"github.com/jourloy/nutri-backend/internal/supplement"
 	"github.com/jourloy/nutri-backend/internal/telegram"
 	"github.com/jourloy/nutri-backend/internal/template"
 	"github.com/jourloy/nutri-backend/internal/ticket"
@@ -94,6 +95,7 @@ func Start() error {
 		promo.NewController().RegisterRoutes(r)
 		ticket.NewController().RegisterRoutes(r)
 		recommendation.NewController().RegisterRoutes(r)
+		supplement.NewController().RegisterRoutes(r)
 
 		if newsCtrl, err := news.NewController(); err != nil {
 			logger.Warn("News controller disabled", "error", err)
@@ -130,17 +132,35 @@ func Start() error {
 		// Internal API routes (requires service token)
 		r.Group(func(r chi.Router) {
 			r.Use(middlewares.ServiceAuth)
-			if internalCtrl, err := internal_api.NewController(); err != nil {
-				logger.Warn("Internal API controller disabled", "error", err)
-			} else {
-				internalCtrl.RegisterRoutes(r)
-			}
+			r.Route("/internal", func(r chi.Router) {
+				// Supplement internal routes
+				supplement.NewController().RegisterInternalRoutes(r)
+
+				// Other internal API routes
+				if internalCtrl, err := internal_api.NewController(); err != nil {
+					logger.Warn("Internal API controller disabled", "error", err)
+				} else {
+					// Register routes directly without /internal prefix
+					r.Post("/ai/analyze-food", internalCtrl.AnalyzeFoodImage)
+					r.Post("/product", internalCtrl.CreateProduct)
+					r.Get("/user-by-telegram-id", internalCtrl.GetUserByTelegramId)
+					r.Get("/products-today-count", internalCtrl.GetProductsTodayCount)
+
+					logger.Info("╔═════ Internal API")
+					logger.Info("║   POST /ai/analyze-food")
+					logger.Info("║   POST /product")
+					logger.Info("║    GET /user-by-telegram-id")
+					logger.Info("║    GET /products-today-count")
+					logger.Info("╚═════")
+				}
+			})
 		})
 	})
 
 	// Background workers
 	order.StartWorker()
 	body.StartWorker()
+	supplement.StartWorker()
 
 	logger.Debug("Handlers initialized", "latency", time.Since(tempTime))
 
