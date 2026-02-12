@@ -298,3 +298,80 @@ func (p *OpenAIProvider) detectViolation(content string) bool {
 		strings.Contains(lowerContent, "not food-related") ||
 		strings.Contains(lowerContent, "inappropriate")
 }
+
+func (p *OpenAIProvider) ImproveText(ctx context.Context, html string) (string, error) {
+	resp, err := p.client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4o,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleSystem,
+					Content: improveTextSystemPrompt,
+				},
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: html,
+				},
+			},
+			MaxTokens:   2000,
+			Temperature: 0.2,
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no response from openai")
+	}
+
+	content := StripMarkdownCodeFences(resp.Choices[0].Message.Content)
+	if content == "" {
+		return "", fmt.Errorf("empty response from openai")
+	}
+	return content, nil
+}
+
+func (p *OpenAIProvider) GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error) {
+	userMessage := fmt.Sprintf("Topic: %s\nDescription: %s", req.Topic, req.Description)
+
+	resp, err := p.client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4o,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleSystem,
+					Content: generateArticleSystemPrompt,
+				},
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: userMessage,
+				},
+			},
+			MaxTokens:   8000,
+			Temperature: 0.4,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from openai")
+	}
+
+	content := StripMarkdownCodeFences(resp.Choices[0].Message.Content)
+	if content == "" {
+		return nil, fmt.Errorf("empty response from openai")
+	}
+	var article GeneratedArticle
+	if err := ParseJSONResponse(content, &article); err != nil {
+		return nil, fmt.Errorf("failed to parse openai response: %w", err)
+	}
+
+	if article.TitleRu == "" || article.TitleEn == "" || article.ContentRu == "" || article.ContentEn == "" {
+		return nil, fmt.Errorf("incomplete article generated")
+	}
+
+	return &article, nil
+}

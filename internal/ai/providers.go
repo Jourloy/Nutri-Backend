@@ -13,6 +13,8 @@ import (
 type AIProvider interface {
 	AnalyzeImage(ctx context.Context, req ImageAnalysisRequest) (*AnalysisResponse, error)
 	AnalyzeText(ctx context.Context, req TextAnalysisRequest) (*AnalysisResponse, error)
+	ImproveText(ctx context.Context, html string) (string, error)
+	GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error)
 	GetModelName() string
 	CalculateCost(promptTokens, completionTokens int) float64
 }
@@ -68,5 +70,36 @@ func GetProvider(logger *log.Logger) (AIProvider, error) {
 
 	default:
 		return nil, fmt.Errorf("unknown AI provider: %s (supported: perplexity, openai, auto)", providerName)
+	}
+}
+
+// GetFallbackProvider returns an alternate provider (if configured) that can be used as a one-shot fallback.
+// It never returns the same provider type as primary.
+func GetFallbackProvider(logger *log.Logger, primary AIProvider) (AIProvider, error) {
+	switch primary.(type) {
+	case *PerplexityProvider:
+		if lib.Config.OpenAIAPIKey == "" {
+			return nil, nil
+		}
+		p, err := NewOpenAIProvider(lib.Config.OpenAIAPIKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize OpenAI fallback: %w", err)
+		}
+		logger.Info("AI fallback provider initialized", "provider", "openai", "model", p.GetModelName())
+		return p, nil
+
+	case *OpenAIProvider:
+		if lib.Config.PerplexityAPIKey == "" {
+			return nil, nil
+		}
+		p, err := NewPerplexityProvider(lib.Config.PerplexityAPIKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Perplexity fallback: %w", err)
+		}
+		logger.Info("AI fallback provider initialized", "provider", "perplexity", "model", p.GetModelName())
+		return p, nil
+
+	default:
+		return nil, nil
 	}
 }

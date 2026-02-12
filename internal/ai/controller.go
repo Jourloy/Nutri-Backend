@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/nutri-backend/internal/middlewares"
 )
 
 var (
@@ -49,6 +51,13 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 
 		// Limits
 		r.Get("/limit-status", c.GetLimitStatus)
+
+		// Admin tools
+		r.Group(func(r chi.Router) {
+			r.Use(middlewares.AdminOnly)
+			r.Post("/improve-text", c.ImproveText)
+			r.Post("/generate-article", c.GenerateArticle)
+		})
 	})
 
 	logger.Info("╔═════ AI")
@@ -58,6 +67,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║    GET /analysis-history?limit=10")
 	logger.Info("║    GET /analysis/{id}")
 	logger.Info("║    GET /limit-status?type=food_analysis")
+	logger.Info("║   POST /improve-text (admin: improve HTML)")
+	logger.Info("║   POST /generate-article (admin: generate RU+EN article)")
 	logger.Info("╚═════")
 }
 
@@ -341,4 +352,76 @@ func (c *Controller) GetLimitStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(limitResult)
+}
+
+// ImproveText improves article HTML formatting (admin-only).
+func (c *Controller) ImproveText(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body ImproveTextRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if body.HTML == "" {
+		http.Error(w, "html is required", http.StatusBadRequest)
+		return
+	}
+
+	improved, err := c.service.ImproveText(r.Context(), u.Id, body.HTML)
+	if err != nil {
+		logger.Error("improve text failed", "userId", u.Id, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(ImproveTextResponse{HTML: improved})
+}
+
+// GenerateArticle generates a full RU+EN article draft (admin-only).
+func (c *Controller) GenerateArticle(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body GenerateArticleRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if body.Topic == "" {
+		http.Error(w, "topic is required", http.StatusBadRequest)
+		return
+	}
+	if body.Description == "" {
+		http.Error(w, "description is required", http.StatusBadRequest)
+		return
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(body.Provider))
+	if provider != "" && provider != "auto" && provider != "openai" && provider != "perplexity" {
+		http.Error(w, "invalid provider", http.StatusBadRequest)
+		return
+	}
+
+	article, err := c.service.GenerateArticle(r.Context(), u.Id, body.Topic, body.Description, provider)
+	if err != nil {
+		logger.Error("generate article failed", "userId", u.Id, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(article)
 }

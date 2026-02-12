@@ -470,3 +470,167 @@ Analyze the food based on its name and description. Provide accurate nutritional
 		IsViolation:      false,
 	}, nil
 }
+
+func (p *PerplexityProvider) ImproveText(ctx context.Context, html string) (string, error) {
+	payload := map[string]interface{}{
+		"model": "sonar-pro",
+		"messages": []map[string]interface{}{
+			{"role": "system", "content": improveTextSystemPrompt},
+			{"role": "user", "content": html},
+		},
+		"max_tokens":  2000,
+		"temperature": 0.2,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		"https://api.perplexity.ai/chat/completions", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return "", err
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, body)
+	}
+
+	var apiResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(apiResp.Choices) == 0 {
+		return "", fmt.Errorf("no response from perplexity")
+	}
+
+	content := StripMarkdownCodeFences(apiResp.Choices[0].Message.Content)
+	if content == "" {
+		return "", fmt.Errorf("empty response from perplexity")
+	}
+	return content, nil
+}
+
+func (p *PerplexityProvider) GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error) {
+	userMessage := fmt.Sprintf("Topic: %s\nDescription: %s", req.Topic, req.Description)
+
+	jsonSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"titleRu":           map[string]interface{}{"type": "string"},
+			"titleEn":           map[string]interface{}{"type": "string"},
+			"previewTextRu":     map[string]interface{}{"type": "string"},
+			"previewTextEn":     map[string]interface{}{"type": "string"},
+			"metaDescriptionRu": map[string]interface{}{"type": "string"},
+			"metaDescriptionEn": map[string]interface{}{"type": "string"},
+			"contentRu":         map[string]interface{}{"type": "string"},
+			"contentEn":         map[string]interface{}{"type": "string"},
+		},
+		"required": []string{
+			"titleRu",
+			"titleEn",
+			"previewTextRu",
+			"previewTextEn",
+			"metaDescriptionRu",
+			"metaDescriptionEn",
+			"contentRu",
+			"contentEn",
+		},
+		"additionalProperties": false,
+	}
+
+	payload := map[string]interface{}{
+		"model": "sonar-pro",
+		"messages": []map[string]interface{}{
+			{"role": "system", "content": generateArticleSystemPrompt},
+			{"role": "user", "content": userMessage},
+		},
+		"max_tokens":  8000,
+		"temperature": 0.4,
+		"response_format": map[string]interface{}{
+			"type": "json_schema",
+			"json_schema": map[string]interface{}{
+				"name":   "generated_article",
+				"schema": jsonSchema,
+				"strict": true,
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		"https://api.perplexity.ai/chat/completions", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, body)
+	}
+
+	var apiResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(apiResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from perplexity")
+	}
+
+	content := apiResp.Choices[0].Message.Content
+	p.logger.Debug("raw AI response", "content", content)
+
+	var article GeneratedArticle
+	content = StripMarkdownCodeFences(content)
+	err = ParseJSONResponse(content, &article)
+	if err != nil {
+		p.logger.Error("failed to parse AI response", "error", err, "rawContent", content)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if article.TitleRu == "" || article.TitleEn == "" || article.ContentRu == "" || article.ContentEn == "" {
+		return nil, fmt.Errorf("incomplete article generated")
+	}
+
+	return &article, nil
+}

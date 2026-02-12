@@ -27,13 +27,29 @@ type Service interface {
 	AnalyzeFoodByText(ctx context.Context, userId string, foodName string, foodDescription string, totalWeight float64, language string) (*FoodAnalysisResult, error)
 	CheckUserLimit(ctx context.Context, userId, requestType string) (*LimitCheckResult, error)
 	GetUserAnalysisHistory(ctx context.Context, userId string, limit int) ([]AnalysisLog, error)
+	ImproveText(ctx context.Context, userId string, html string) (string, error)
+	GenerateArticle(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error)
 }
 
 type service struct {
-	repo        Repository
-	aiProvider  AIProvider
-	minioClient *minio.Client
-	logger      *log.Logger
+	repo             Repository
+	aiProvider       AIProvider
+	aiProviderName   string
+	fallbackProvider AIProvider
+	fallbackName     string
+	minioClient      *minio.Client
+	logger           *log.Logger
+}
+
+func providerNameFromInstance(p AIProvider) string {
+	switch p.(type) {
+	case *OpenAIProvider:
+		return "openai"
+	case *PerplexityProvider:
+		return "perplexity"
+	default:
+		return "unknown"
+	}
 }
 
 func NewService(repo Repository) (Service, error) {
@@ -50,6 +66,15 @@ func NewService(repo Repository) (Service, error) {
 	}
 
 	logger.Info("AI provider initialized", "model", aiProvider.GetModelName())
+
+	aiProviderName := providerNameFromInstance(aiProvider)
+
+	fallbackProvider, err := GetFallbackProvider(logger, aiProvider)
+	if err != nil {
+		// Fallback is optional; log and continue.
+		logger.Warn("failed to initialize AI fallback provider", "error", err)
+	}
+	fallbackName := providerNameFromInstance(fallbackProvider)
 
 	// Parse Minio endpoint to extract hostname and determine SSL
 	endpoint := lib.Config.MinioEndpoint
@@ -94,10 +119,13 @@ func NewService(repo Repository) (Service, error) {
 	}
 
 	return &service{
-		repo:        repo,
-		aiProvider:  aiProvider,
-		minioClient: minioClient,
-		logger:      logger,
+		repo:             repo,
+		aiProvider:       aiProvider,
+		aiProviderName:   aiProviderName,
+		fallbackProvider: fallbackProvider,
+		fallbackName:     fallbackName,
+		minioClient:      minioClient,
+		logger:           logger,
 	}, nil
 }
 
@@ -406,6 +434,88 @@ func (s *service) CheckUserLimit(ctx context.Context, userId, requestType string
 // GetUserAnalysisHistory retrieves user's analysis history
 func (s *service) GetUserAnalysisHistory(ctx context.Context, userId string, limit int) ([]AnalysisLog, error) {
 	return s.repo.GetUserAnalysisLogs(ctx, userId, limit)
+}
+
+// ImproveText improves the given HTML without changing its meaning (admin tool).
+func (s *service) ImproveText(ctx context.Context, userId string, html string) (string, error) {
+	html = strings.TrimSpace(html)
+	if html == "" {
+		return "", fmt.Errorf("html is required")
+	}
+	if len(html) > 50_000 {
+		return "", fmt.Errorf("html is too long")
+	}
+	return s.aiProvider.ImproveText(ctx, html)
+}
+
+func (s *service) selectArticleProvider(provider string) (AIProvider, error) {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	if p == "" || p == "auto" {
+		return s.aiProvider, nil
+	}
+
+	if p == s.aiProviderName {
+		return s.aiProvider, nil
+	}
+	if s.fallbackProvider != nil && p == s.fallbackName {
+		return s.fallbackProvider, nil
+	}
+
+	switch p {
+	case "openai", "perplexity":
+		return nil, fmt.Errorf("provider %q is not available", p)
+	default:
+		return nil, fmt.Errorf("unknown provider %q", p)
+	}
+}
+
+// GenerateArticle generates a full RU+EN blog article based on topic/description (admin tool).
+func (s *service) GenerateArticle(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error) {
+	topic = strings.TrimSpace(topic)
+	description = strings.TrimSpace(description)
+
+	if topic == "" {
+		return nil, fmt.Errorf("topic is required")
+	}
+	if description == "" {
+		return nil, fmt.Errorf("description is required")
+	}
+	if len(topic) > 200 {
+		return nil, fmt.Errorf("topic is too long")
+	}
+	if len(description) > 2000 {
+		return nil, fmt.Errorf("description is too long")
+	}
+
+	p, err := s.selectArticleProvider(provider)
+	if err != nil {
+		return nil, err
+	}
+
+	article, err := p.GenerateArticle(ctx, GenerateArticleRequest{Topic: topic, Description: description, Provider: provider})
+	if err != nil {
+		return nil, err
+	}
+	if article == nil {
+		return nil, fmt.Errorf("empty article")
+	}
+	if article.TitleRu == "" || article.TitleEn == "" || article.ContentRu == "" || article.ContentEn == "" {
+		return nil, fmt.Errorf("incomplete article generated")
+	}
+
+	// Normalize fields defensively (models sometimes append "(N символов)").
+	article.PreviewTextRu = StripTrailingCharCount(article.PreviewTextRu)
+	article.PreviewTextEn = StripTrailingCharCount(article.PreviewTextEn)
+	article.MetaDescriptionRu = StripTrailingCharCount(article.MetaDescriptionRu)
+	article.MetaDescriptionEn = StripTrailingCharCount(article.MetaDescriptionEn)
+
+	ruWords := ApproxWordCountFromHTML(article.ContentRu)
+	enWords := ApproxWordCountFromHTML(article.ContentEn)
+	if s.logger != nil && (ruWords < 900 || enWords < 900) {
+		s.logger.Warn("GenerateArticle produced short content", "provider", strings.ToLower(strings.TrimSpace(provider)), "ru_words", ruWords, "en_words", enWords)
+	}
+
+	return article, nil
 }
 
 // processAndUploadImage processes image (resize, compress) and uploads to Minio
