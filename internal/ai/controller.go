@@ -57,6 +57,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 			r.Use(middlewares.AdminOnly)
 			r.Post("/improve-text", c.ImproveText)
 			r.Post("/generate-article", c.GenerateArticle)
+			r.Post("/generate-recipe-draft", c.GenerateRecipeDraft)
 		})
 	})
 
@@ -69,6 +70,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║    GET /limit-status?type=food_analysis")
 	logger.Info("║   POST /improve-text (admin: improve HTML)")
 	logger.Info("║   POST /generate-article (admin: generate RU+EN article)")
+	logger.Info("║   POST /generate-recipe-draft (admin: generate recipe draft)")
 	logger.Info("╚═════")
 }
 
@@ -424,4 +426,70 @@ func (c *Controller) GenerateArticle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(article)
+}
+
+// GenerateRecipeDraft generates a structured recipe draft from RU inputs and image (admin-only).
+func (c *Controller) GenerateRecipeDraft(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		http.Error(w, "failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	titleRu := strings.TrimSpace(r.FormValue("titleRu"))
+	ingredientsRu := strings.TrimSpace(r.FormValue("ingredientsRu"))
+	stepsRu := strings.TrimSpace(r.FormValue("stepsRu"))
+	imageURL := strings.TrimSpace(r.FormValue("imageUrl"))
+	provider := strings.ToLower(strings.TrimSpace(r.FormValue("provider")))
+	if provider == "" {
+		provider = "auto"
+	}
+	if provider != "auto" && provider != "openai" && provider != "perplexity" {
+		http.Error(w, "invalid provider", http.StatusBadRequest)
+		return
+	}
+
+	var imageData []byte
+	file, _, err := r.FormFile("image")
+	if err == nil {
+		defer file.Close()
+		imageData, err = io.ReadAll(file)
+		if err != nil {
+			http.Error(w, "failed to read image", http.StatusBadRequest)
+			return
+		}
+	} else if err != http.ErrMissingFile {
+		http.Error(w, "failed to read image", http.StatusBadRequest)
+		return
+	}
+
+	if len(imageData) == 0 && imageURL == "" {
+		http.Error(w, "image or imageUrl is required", http.StatusBadRequest)
+		return
+	}
+
+	draft, err := c.service.GenerateRecipeDraft(
+		r.Context(),
+		u.Id,
+		titleRu,
+		ingredientsRu,
+		stepsRu,
+		imageData,
+		imageURL,
+		provider,
+	)
+	if err != nil {
+		logger.Error("generate recipe draft failed", "userId", u.Id, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(draft)
 }

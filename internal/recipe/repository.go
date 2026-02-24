@@ -37,6 +37,7 @@ type Repository interface {
 	GetTags(ctx context.Context, userId *string) ([]Tag, error)
 	GetTagsByRecipeId(ctx context.Context, recipeId int64) ([]Tag, error)
 	SetRecipeTags(ctx context.Context, recipeId int64, tagIds []int64) error
+	CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error)
 
 	// Recipes
 	CreateRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
@@ -46,6 +47,8 @@ type Repository interface {
 	GetRecipeBySlug(ctx context.Context, slug string) (*Recipe, error)
 	GetRecipeByShareToken(ctx context.Context, token string) (*Recipe, error)
 	GetRecipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error)
+	UpdateNutriRecipe(ctx context.Context, r RecipeUpdate) (*Recipe, error)
+	DeleteNutriRecipe(ctx context.Context, id int64) error
 	SetRecipeShareToken(ctx context.Context, id int64, token string) error
 	ClearRecipeShareToken(ctx context.Context, id int64) error
 	IncrementViewCount(ctx context.Context, id int64) error
@@ -334,6 +337,20 @@ func (r *repository) CreateTag(ctx context.Context, t TagCreate) (*Tag, error) {
 	return &tag, nil
 }
 
+func (r *repository) CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error) {
+	const q = `
+		INSERT INTO recipe_tags (user_id, slug, name_ru, name_en, tag_type)
+		VALUES (NULL, $1, $2, $3, 'system')
+		RETURNING id, user_id, slug, name_ru, name_en, tag_type, created_at, updated_at`
+
+	var tag Tag
+	err := r.db.GetContext(ctx, &tag, q, t.Slug, t.NameRu, t.NameEn)
+	if err != nil {
+		return nil, err
+	}
+	return &tag, nil
+}
+
 func (r *repository) UpdateTag(ctx context.Context, t TagUpdate) (*Tag, error) {
 	const q = `
 		UPDATE recipe_tags SET
@@ -520,9 +537,64 @@ func (r *repository) UpdateRecipe(ctx context.Context, ru RecipeUpdate) (*Recipe
 	return &recipe, nil
 }
 
+func (r *repository) UpdateNutriRecipe(ctx context.Context, ru RecipeUpdate) (*Recipe, error) {
+	const q = `
+		UPDATE recipes SET
+			slug = $1,
+			title_ru = $2,
+			title_en = $3,
+			description_ru = $4,
+			description_en = $5,
+			main_image_url = $6,
+			external_url = $7,
+			prep_time = $8,
+			cook_time = $9,
+			total_time = $10,
+			servings = $11,
+			servings_unit = $12,
+			calories = $13,
+			protein = $14,
+			fat = $15,
+			carbs = $16,
+			fiber = $17,
+			difficulty = $18,
+			category_id = $19,
+			meta_description_ru = $20,
+			meta_description_en = $21,
+			updated_at = NOW()
+		WHERE id = $22 AND deleted_at IS NULL
+		RETURNING id, book_id, user_id, slug, title_ru, title_en, description_ru, description_en, main_image_url, external_url,
+		          prep_time, cook_time, total_time, servings, servings_unit,
+		          calories, protein, fat, carbs, fiber, nutrition_calculated_by_ai, difficulty,
+		          share_token, is_public, og_image_url, meta_description_ru, meta_description_en,
+		          view_count, copy_count, copied_from_id, category_id, published_at, created_at, updated_at`
+
+	servings := ru.Servings
+	if servings < 1 {
+		servings = 1
+	}
+
+	var recipe Recipe
+	err := r.db.GetContext(ctx, &recipe, q,
+		ru.Slug, ru.TitleRu, ru.TitleEn, ru.DescriptionRu, ru.DescriptionEn, ru.MainImageUrl, ru.ExternalUrl,
+		ru.PrepTime, ru.CookTime, ru.TotalTime, servings, ru.ServingsUnit,
+		ru.Calories, ru.Protein, ru.Fat, ru.Carbs, ru.Fiber, ru.Difficulty, ru.CategoryId,
+		ru.MetaDescriptionRu, ru.MetaDescriptionEn, ru.Id)
+	if err != nil {
+		return nil, err
+	}
+	return &recipe, nil
+}
+
 func (r *repository) DeleteRecipe(ctx context.Context, id int64, userId string) error {
 	const q = `UPDATE recipes SET deleted_at = NOW() WHERE id = $1 AND user_id = $2`
 	_, err := r.db.ExecContext(ctx, q, id, userId)
+	return err
+}
+
+func (r *repository) DeleteNutriRecipe(ctx context.Context, id int64) error {
+	const q = `UPDATE recipes SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+	_, err := r.db.ExecContext(ctx, q, id)
 	return err
 }
 

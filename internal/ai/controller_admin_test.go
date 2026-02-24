@@ -1,8 +1,10 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +19,7 @@ import (
 type fakeService struct {
 	improveFn func(ctx context.Context, userId string, html string) (string, error)
 	genFn     func(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error)
+	draftFn   func(ctx context.Context, userId string, titleRu, ingredientsRu, stepsRu string, imageData []byte, imageURL, provider string) (*GeneratedRecipeDraft, error)
 }
 
 func (f fakeService) AnalyzeFoodImage(ctx context.Context, userId string, imageData []byte, totalWeight *float64, userPrompt string, language string) (*FoodAnalysisResult, error) {
@@ -55,6 +58,31 @@ func (f fakeService) GenerateArticle(ctx context.Context, userId string, topic s
 		MetaDescriptionEn: "EN meta",
 		ContentRu:         "<p>RU</p>",
 		ContentEn:         "<p>EN</p>",
+	}, nil
+}
+
+func (f fakeService) GenerateRecipeDraft(
+	ctx context.Context,
+	userId string,
+	titleRu, ingredientsRu, stepsRu string,
+	imageData []byte,
+	imageURL, provider string,
+) (*GeneratedRecipeDraft, error) {
+	if f.draftFn != nil {
+		return f.draftFn(ctx, userId, titleRu, ingredientsRu, stepsRu, imageData, imageURL, provider)
+	}
+	return &GeneratedRecipeDraft{
+		TitleRu:       titleRu,
+		TitleEn:       "Oatmeal Pancakes",
+		DescriptionRu: "Короткое описание",
+		DescriptionEn: "Short description",
+		Servings:      2,
+		Ingredients: []GeneratedRecipeIngredient{
+			{SortOrder: 1, NameRu: "Овсянка"},
+		},
+		Steps: []GeneratedRecipeStep{
+			{StepNumber: 1, InstructionRu: "Смешайте ингредиенты"},
+		},
 	}, nil
 }
 
@@ -203,5 +231,131 @@ func TestGenerateArticle_InvalidProvider(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+}
+
+func buildRecipeDraftMultipart(t *testing.T, withImage bool) (*bytes.Buffer, string) {
+	t.Helper()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	_ = writer.WriteField("titleRu", "Овсяные панкейки")
+	_ = writer.WriteField("ingredientsRu", "Овсянка - 100 г\nЯйцо - 1 шт")
+	_ = writer.WriteField("stepsRu", "Смешайте ингредиенты\nОбжарьте на сковороде")
+	_ = writer.WriteField("provider", "openai")
+
+	if withImage {
+		part, err := writer.CreateFormFile("image", "test.jpg")
+		if err != nil {
+			t.Fatalf("failed to create form file: %v", err)
+		}
+		if _, err := part.Write([]byte("fake-image")); err != nil {
+			t.Fatalf("failed to write image data: %v", err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	return body, writer.FormDataContentType()
+}
+
+func TestGenerateRecipeDraft_Unauthorized(t *testing.T) {
+	r := chi.NewRouter()
+	c := &Controller{service: fakeService{}}
+	c.RegisterRoutes(r)
+
+	body, contentType := buildRecipeDraftMultipart(t, true)
+	req := httptest.NewRequest(http.MethodPost, "/ai/generate-recipe-draft", body)
+	req.Header.Set("Content-Type", contentType)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, rr.Code)
+	}
+}
+
+func TestGenerateRecipeDraft_ForbiddenForNonAdmin(t *testing.T) {
+	r := chi.NewRouter()
+	c := &Controller{service: fakeService{}}
+	c.RegisterRoutes(r)
+
+	body, contentType := buildRecipeDraftMultipart(t, true)
+	req := httptest.NewRequest(http.MethodPost, "/ai/generate-recipe-draft", body)
+	req.Header.Set("Content-Type", contentType)
+	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: false}))
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rr.Code)
+	}
+}
+
+func TestGenerateRecipeDraft_Validation(t *testing.T) {
+	r := chi.NewRouter()
+	c := &Controller{service: fakeService{}}
+	c.RegisterRoutes(r)
+
+	body, contentType := buildRecipeDraftMultipart(t, false)
+	req := httptest.NewRequest(http.MethodPost, "/ai/generate-recipe-draft", body)
+	req.Header.Set("Content-Type", contentType)
+	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: true}))
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+}
+
+func TestGenerateRecipeDraft_SuccessForAdmin(t *testing.T) {
+	r := chi.NewRouter()
+	c := &Controller{service: fakeService{
+		draftFn: func(ctx context.Context, userId string, titleRu, ingredientsRu, stepsRu string, imageData []byte, imageURL, provider string) (*GeneratedRecipeDraft, error) {
+			if len(imageData) == 0 {
+				t.Fatalf("expected image bytes to be forwarded to service")
+			}
+			if provider != "openai" {
+				t.Fatalf("expected provider=openai, got %q", provider)
+			}
+			return &GeneratedRecipeDraft{
+				TitleRu: titleRu,
+				TitleEn: "Oatmeal Pancakes",
+				Ingredients: []GeneratedRecipeIngredient{
+					{SortOrder: 1, NameRu: "Овсянка"},
+				},
+				Steps: []GeneratedRecipeStep{
+					{StepNumber: 1, InstructionRu: "Смешайте ингредиенты"},
+				},
+			}, nil
+		},
+	}}
+	c.RegisterRoutes(r)
+
+	body, contentType := buildRecipeDraftMultipart(t, true)
+	req := httptest.NewRequest(http.MethodPost, "/ai/generate-recipe-draft", body)
+	req.Header.Set("Content-Type", contentType)
+	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: true}))
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	var out GeneratedRecipeDraft
+	if err := json.NewDecoder(rr.Body).Decode(&out); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if out.TitleEn == "" || len(out.Ingredients) == 0 || len(out.Steps) == 0 {
+		t.Fatalf("expected filled recipe draft fields")
 	}
 }

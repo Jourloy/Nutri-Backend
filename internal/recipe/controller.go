@@ -92,12 +92,14 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(requireAdmin)
 
+			r.Get("/admin/recipes/{id}", c.GetNutriRecipeById)
 			r.Post("/admin/recipes", c.CreateNutriRecipe)
 			r.Put("/admin/recipes/{id}", c.UpdateNutriRecipe)
 			r.Delete("/admin/recipes/{id}", c.DeleteNutriRecipe)
 			r.Get("/admin/recipes", c.GetAllNutriRecipes)
 
 			r.Post("/admin/categories", c.CreateSystemCategory)
+			r.Post("/admin/tags", c.CreateSystemTag)
 		})
 	})
 
@@ -122,9 +124,11 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   POST /recipe/recipes/{id}/copy (auth: copy recipe)")
 	logger.Info("║   POST /recipe/recipes/{id}/to-diary (auth: add to diary)")
 	logger.Info("║   POST /recipe/recipes/{id}/calculate-nutrition (auth: AI nutrition calc)")
+	logger.Info("║    GET /recipe/admin/recipes/{id} (admin: get Nutri recipe by id)")
 	logger.Info("║   POST /recipe/admin/recipes (admin: create Nutri recipe)")
 	logger.Info("║    PUT /recipe/admin/recipes/{id} (admin: update Nutri recipe)")
 	logger.Info("║ DELETE /recipe/admin/recipes/{id} (admin: delete Nutri recipe)")
+	logger.Info("║   POST /recipe/admin/tags (admin: create system tag)")
 	logger.Info("╚═════")
 }
 
@@ -878,6 +882,25 @@ func (c *Controller) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 // ===== Admin Endpoints =====
 
+func (c *Controller) GetNutriRecipeById(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid recipe id", http.StatusBadRequest)
+		return
+	}
+
+	recipe, err := c.service.GetNutriRecipeById(context.Background(), id)
+	if err != nil {
+		logger.Error("failed to get Nutri recipe by id", "id", id, "error", err)
+		http.Error(w, "recipe not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recipe)
+}
+
 func (c *Controller) CreateNutriRecipe(w http.ResponseWriter, r *http.Request) {
 	var rc RecipeCreate
 	if err := json.NewDecoder(r.Body).Decode(&rc); err != nil {
@@ -992,6 +1015,30 @@ func (c *Controller) CreateSystemCategory(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(category)
+}
+
+func (c *Controller) CreateSystemTag(w http.ResponseWriter, r *http.Request) {
+	var tc TagCreate
+	if err := json.NewDecoder(r.Body).Decode(&tc); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if tc.NameRu == "" {
+		http.Error(w, "nameRu is required", http.StatusBadRequest)
+		return
+	}
+
+	tag, err := c.service.CreateSystemTag(context.Background(), tc)
+	if err != nil {
+		logger.Error("failed to create system tag", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(tag)
 }
 
 // ===== Upload =====

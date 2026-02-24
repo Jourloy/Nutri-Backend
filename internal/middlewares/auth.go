@@ -15,7 +15,13 @@ import (
 
 func Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userRepo := user.NewRepository()
+		// Public auth endpoints must remain reachable even with stale/invalid jwt cookie.
+		// Otherwise login/refresh flows are blocked by the middleware itself.
+		if isPublicAuthRoute(r.Method, r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		jwtCfg := auth.Config{
 			Secret:     []byte(lib.Config.JWTSecret),
 			Issuer:     "nutri-api",
@@ -30,6 +36,7 @@ func Auth(next http.Handler) http.Handler {
 			return
 		}
 
+		userRepo := user.NewRepository()
 		claims, err := auth.ValidateToken(jwtCfg, token)
 		if err != nil {
 			// Если access токен просто истёк — чистим ТОЛЬКО access cookie (оставляем refresh, чтобы фронт мог рефрешнуться)
@@ -73,6 +80,32 @@ func Auth(next http.Handler) http.Handler {
 		ctx = auth.ContextWithUser(ctx, *u)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func isPublicAuthRoute(method, path string) bool {
+	if method == "" {
+		return false
+	}
+
+	normalized := strings.TrimSuffix(path, "/")
+	switch {
+	case method == http.MethodPost && normalized == "/api/v1/auth/login":
+		return true
+	case method == http.MethodPost && normalized == "/api/v1/auth/register":
+		return true
+	case method == http.MethodPost && normalized == "/api/v1/auth/refresh":
+		return true
+	case method == http.MethodPost && normalized == "/api/v1/auth/request-password-reset":
+		return true
+	case method == http.MethodPost && normalized == "/api/v1/auth/reset-password":
+		return true
+	case method == http.MethodGet && strings.HasPrefix(normalized, "/api/v1/auth/check-username/"):
+		return true
+	case method == http.MethodGet && normalized == "/api/v1/auth/validate-reset-token":
+		return true
+	default:
+		return false
+	}
 }
 
 func extractToken(r *http.Request) string {

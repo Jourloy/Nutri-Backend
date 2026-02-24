@@ -54,6 +54,114 @@ type UserListItem struct {
 	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
 }
 
+type UserSortBy string
+
+const (
+	UserSortByID           UserSortBy = "id"
+	UserSortByUsername     UserSortBy = "username"
+	UserSortByEmail        UserSortBy = "email"
+	UserSortByLocale       UserSortBy = "locale"
+	UserSortByPlanName     UserSortBy = "plan_name"
+	UserSortBySubStatus    UserSortBy = "sub_status"
+	UserSortBySubPeriodEnd UserSortBy = "sub_period_end"
+	UserSortByLoginedAt    UserSortBy = "logined_at"
+	UserSortByCreatedAt    UserSortBy = "created_at"
+)
+
+type SortOrder string
+
+const (
+	SortOrderAsc  SortOrder = "asc"
+	SortOrderDesc SortOrder = "desc"
+)
+
+type AdminUserProfile struct {
+	Id              string     `json:"id" db:"id"`
+	Username        string     `json:"username" db:"username"`
+	Email           *string    `json:"email,omitempty" db:"email"`
+	EmailVerified   bool       `json:"email_verified" db:"email_verified"`
+	Locale          *string    `json:"locale,omitempty" db:"locale"`
+	Timezone        *string    `json:"timezone,omitempty" db:"timezone"`
+	IsAcceptTerms   bool       `json:"is_accept_terms" db:"is_accept_terms"`
+	IsAcceptPrivacy bool       `json:"is_accept_privacy" db:"is_accept_privacy"`
+	Is18            bool       `json:"is_18" db:"is_18"`
+	IsAdmin         bool       `json:"is_admin" db:"is_admin"`
+	ViewUpdates     int64      `json:"view_updates" db:"view_updates"`
+	ViewTutorial    int64      `json:"view_tutorial" db:"view_tutorial"`
+	LoginedAt       *time.Time `json:"logined_at,omitempty" db:"logined_at"`
+	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+type AdminUserSubscription struct {
+	Id                   int64      `json:"id" db:"id"`
+	UserId               string     `json:"user_id" db:"user_id"`
+	PlanId               int64      `json:"plan_id" db:"plan_id"`
+	PlanCode             *string    `json:"plan_code,omitempty" db:"plan_code"`
+	PlanName             *string    `json:"plan_name,omitempty" db:"plan_name"`
+	Status               string     `json:"status" db:"status"`
+	PeriodStart          time.Time  `json:"period_start" db:"period_start"`
+	PeriodEnd            time.Time  `json:"period_end" db:"period_end"`
+	CancelAt             *time.Time `json:"cancel_at,omitempty" db:"cancel_at"`
+	CanceledAt           *time.Time `json:"canceled_at,omitempty" db:"canceled_at"`
+	TrialEnd             *time.Time `json:"trial_end,omitempty" db:"trial_end"`
+	AmountMinor          int64      `json:"amount_minor" db:"amount_minor"`
+	Currency             string     `json:"currency" db:"currency"`
+	BillingPeriod        string     `json:"billing_period" db:"billing_period"`
+	ExternalSubscription *string    `json:"external_subscription_id,omitempty" db:"external_subscription_id"`
+	ExternalCustomer     *string    `json:"external_customer_id,omitempty" db:"external_customer_id"`
+	AdCode               *string    `json:"ad_code,omitempty" db:"ad_code"`
+	CreatedAt            time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+type AdminUserSummary struct {
+	Subscriptions int64 `json:"subscriptions" db:"subscriptions"`
+	Orders        int64 `json:"orders" db:"orders"`
+	Tickets       int64 `json:"tickets" db:"tickets"`
+	Products      int64 `json:"products" db:"products"`
+	Recipes       int64 `json:"recipes" db:"recipes"`
+	Supplements   int64 `json:"supplements" db:"supplements"`
+	Achievements  int64 `json:"achievements" db:"achievements"`
+	Feedbacks     int64 `json:"feedbacks" db:"feedbacks"`
+	BodyWeights   int64 `json:"body_weights" db:"body_weights"`
+	BodyMeasures  int64 `json:"body_measurements" db:"body_measurements"`
+	BodyActivity  int64 `json:"body_activity" db:"body_activity"`
+	BodyWorkouts  int64 `json:"body_workouts" db:"body_workouts"`
+	AIAnalysis    int64 `json:"ai_analysis_logs" db:"ai_analysis_logs"`
+}
+
+type AdminUserLatestOrder struct {
+	Id          int64      `json:"id" db:"id"`
+	Status      string     `json:"status" db:"status"`
+	PlanId      int64      `json:"plan_id" db:"plan_id"`
+	AmountMinor int64      `json:"amount_minor" db:"amount_minor"`
+	Currency    string     `json:"currency" db:"currency"`
+	Provider    string     `json:"provider" db:"provider"`
+	PaidAt      *time.Time `json:"paid_at,omitempty" db:"paid_at"`
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+type AdminUserLatestTicket struct {
+	Id        int64      `json:"id" db:"id"`
+	Subject   string     `json:"subject" db:"subject"`
+	Status    string     `json:"status" db:"status"`
+	Priority  string     `json:"priority" db:"priority"`
+	Category  *string    `json:"category,omitempty" db:"category"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	ClosedAt  *time.Time `json:"closed_at,omitempty" db:"closed_at"`
+}
+
+type UserDetailsResponse struct {
+	User                *AdminUserProfile      `json:"user"`
+	CurrentSubscription *AdminUserSubscription `json:"current_subscription,omitempty"`
+	Summary             AdminUserSummary       `json:"summary"`
+	LatestOrder         *AdminUserLatestOrder  `json:"latest_order,omitempty"`
+	LatestTicket        *AdminUserLatestTicket `json:"latest_ticket,omitempty"`
+}
+
 // UserWithSubscription представляет пользователя с подпиской для создания
 type UserWithSubscription struct {
 	Username   string `json:"username"`
@@ -72,6 +180,11 @@ type UpdatePlanPrice struct {
 type UpdateUserPlanPrice struct {
 	UserId      string `json:"user_id"`
 	AmountMinor int64  `json:"amount_minor"`
+}
+
+type GrantUserSubscriptionRequest struct {
+	PlanId       int64 `json:"plan_id"`
+	DurationDays int64 `json:"duration_days"`
 }
 
 // PlanWithFeatures представляет тариф с его возможностями

@@ -1,10 +1,13 @@
 package admin
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
@@ -37,6 +40,9 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		// Users
 		r.Get("/users", c.GetUsers)
 		r.Post("/users", c.CreateUserWithSubscription)
+		r.Get("/users/{userId}", c.GetUserDetails)
+		r.Post("/users/{userId}/subscription/grant", c.GrantUserSubscription)
+		r.Delete("/users/{userId}", c.DeleteUser)
 
 		// Plans
 		r.Patch("/plans/{planId}/price", c.UpdatePlanPrice)
@@ -53,6 +59,9 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║ GET    /admin/dashboard")
 	logger.Info("║ GET    /admin/users")
 	logger.Info("║ POST   /admin/users")
+	logger.Info("║ GET    /admin/users/{userId}")
+	logger.Info("║ POST   /admin/users/{userId}/subscription/grant")
+	logger.Info("║ DELETE /admin/users/{userId}")
 	logger.Info("║ PATCH  /admin/plans/{planId}/price")
 	logger.Info("║ PATCH  /admin/plans/{planId}/features")
 	logger.Info("║ PATCH  /admin/users/{userId}/subscription/price")
@@ -60,6 +69,36 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║ POST   /admin/notifications")
 	logger.Info("║ POST   /admin/notifications/{id}/send")
 	logger.Info("╚═════")
+}
+
+func parseUserSortBy(raw string) UserSortBy {
+	switch UserSortBy(strings.ToLower(strings.TrimSpace(raw))) {
+	case UserSortByID:
+		return UserSortByID
+	case UserSortByUsername:
+		return UserSortByUsername
+	case UserSortByEmail:
+		return UserSortByEmail
+	case UserSortByLocale:
+		return UserSortByLocale
+	case UserSortByPlanName:
+		return UserSortByPlanName
+	case UserSortBySubStatus:
+		return UserSortBySubStatus
+	case UserSortBySubPeriodEnd:
+		return UserSortBySubPeriodEnd
+	case UserSortByLoginedAt:
+		return UserSortByLoginedAt
+	default:
+		return UserSortByCreatedAt
+	}
+}
+
+func parseSortOrder(raw string) SortOrder {
+	if SortOrder(strings.ToLower(strings.TrimSpace(raw))) == SortOrderAsc {
+		return SortOrderAsc
+	}
+	return SortOrderDesc
 }
 
 // GetDashboard возвращает статистику для дашборда
@@ -86,8 +125,10 @@ func (c *Controller) GetUsers(w http.ResponseWriter, r *http.Request) {
 	if offset < 0 {
 		offset = 0
 	}
+	sortBy := parseUserSortBy(r.URL.Query().Get("sort_by"))
+	sortOrder := parseSortOrder(r.URL.Query().Get("sort_order"))
 
-	users, total, err := c.service.GetAllUsers(r.Context(), limit, offset)
+	users, total, err := c.service.GetAllUsers(r.Context(), limit, offset, sortBy, sortOrder)
 	if err != nil {
 		logger.Error("Error getting users", "error", err)
 		http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
@@ -95,14 +136,94 @@ func (c *Controller) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"users":  users,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"users":      users,
+		"total":      total,
+		"limit":      limit,
+		"offset":     offset,
+		"sort_by":    sortBy,
+		"sort_order": sortOrder,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func (c *Controller) GetUserDetails(w http.ResponseWriter, r *http.Request) {
+	userId := chi.URLParam(r, "userId")
+	if userId == "" {
+		http.Error(w, `{"error": "user id is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	details, err := c.service.GetUserDetails(r.Context(), userId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error": "user not found"}`, http.StatusNotFound)
+			return
+		}
+		logger.Error("Error getting user details", "error", err)
+		http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(details)
+}
+
+func (c *Controller) GrantUserSubscription(w http.ResponseWriter, r *http.Request) {
+	userId := chi.URLParam(r, "userId")
+	if userId == "" {
+		http.Error(w, `{"error": "user id is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req GrantUserSubscriptionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	if req.PlanId <= 0 || req.DurationDays <= 0 {
+		http.Error(w, `{"error": "plan_id and duration_days must be greater than zero"}`, http.StatusBadRequest)
+		return
+	}
+
+	subscription, err := c.service.GrantUserSubscription(r.Context(), userId, req.PlanId, req.DurationDays)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error": "user or plan not found"}`, http.StatusNotFound)
+			return
+		}
+		logger.Error("Error granting subscription", "error", err)
+		http.Error(w, `{"error": "failed to grant subscription"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"subscription": subscription,
+	})
+}
+
+func (c *Controller) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	userId := chi.URLParam(r, "userId")
+	if userId == "" {
+		http.Error(w, `{"error": "user id is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := c.service.DeleteUser(r.Context(), userId); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error": "user not found"}`, http.StatusNotFound)
+			return
+		}
+		logger.Error("Error deleting user", "error", err)
+		http.Error(w, `{"error": "failed to delete user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
 // CreateUserWithSubscription создает пользователя с подпиской

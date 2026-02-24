@@ -2,12 +2,154 @@ package body
 
 import (
 	"context"
+	"errors"
 	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 
 	"github.com/jourloy/nutri-backend/internal/database"
+)
+
+const (
+	defaultCycleLengthDays   = 28
+	defaultPeriodLengthDays  = 5
+	periodCaloriesMultiplier = 1.08
+
+	workoutWaterBonusPerMinute = 10
+	workoutWaterLimitMaxMl     = 4500
+	defaultWaterLimitMl        = 3000
+	maxWorkoutDurationMin      = 600
+	maxWorkoutNoteLength       = 500
+)
+
+var (
+	ErrCycleForbidden    = errors.New("cycle access forbidden")
+	ErrCycleNoActive     = errors.New("no active cycle")
+	ErrCycleDateInvalid  = errors.New("invalid cycle date")
+	ErrCycleInputInvalid = errors.New("invalid cycle input")
+
+	ErrWorkoutInputInvalid = errors.New("invalid workout input")
+	ErrWorkoutFutureDate   = errors.New("future workout date is not allowed")
+
+	allowedFlowIntensity = map[string]struct{}{
+		"spotting": {},
+		"light":    {},
+		"medium":   {},
+		"heavy":    {},
+	}
+
+	allowedEventIntensity = map[string]struct{}{
+		"low":    {},
+		"medium": {},
+		"high":   {},
+	}
+
+	allowedWorkoutTypes = map[string]struct{}{
+		"strength": {},
+		"cardio":   {},
+		"hiit":     {},
+		"running":  {},
+		"walking":  {},
+		"yoga":     {},
+		"pilates":  {},
+		"swimming": {},
+		"other":    {},
+	}
+
+	cycleCatalog = []CycleCatalogCategory{
+		{
+			Category: "sex",
+			Events: []CycleCatalogEvent{
+				{Code: "sex_protected"},
+				{Code: "sex_unprotected"},
+				{Code: "sex_oral"},
+				{Code: "sex_anal"},
+				{Code: "masturbation"},
+				{Code: "orgasm"},
+				{Code: "libido_high"},
+				{Code: "libido_low"},
+			},
+		},
+		{
+			Category: "activity",
+			Events: []CycleCatalogEvent{
+				{Code: "workout_strength"},
+				{Code: "workout_cardio"},
+				{Code: "workout_hiit"},
+				{Code: "workout_yoga"},
+				{Code: "workout_pilates"},
+				{Code: "workout_running"},
+				{Code: "workout_walking"},
+				{Code: "workout_swimming"},
+			},
+		},
+		{
+			Category: "symptoms",
+			Events: []CycleCatalogEvent{
+				{Code: "cramps"},
+				{Code: "headache"},
+				{Code: "back_pain"},
+				{Code: "bloating"},
+				{Code: "fatigue"},
+				{Code: "acne"},
+				{Code: "breast_tenderness"},
+				{Code: "nausea"},
+			},
+		},
+		{
+			Category: "mood",
+			Events: []CycleCatalogEvent{
+				{Code: "mood_calm"},
+				{Code: "mood_happy"},
+				{Code: "mood_irritable"},
+				{Code: "mood_anxious"},
+				{Code: "mood_sad"},
+			},
+		},
+		{
+			Category: "sleep",
+			Events: []CycleCatalogEvent{
+				{Code: "sleep_good"},
+				{Code: "sleep_poor"},
+				{Code: "insomnia"},
+				{Code: "daytime_sleepiness"},
+			},
+		},
+		{
+			Category: "discharge",
+			Events: []CycleCatalogEvent{
+				{Code: "discharge_none"},
+				{Code: "discharge_sticky"},
+				{Code: "discharge_creamy"},
+				{Code: "discharge_watery"},
+				{Code: "discharge_eggwhite"},
+				{Code: "spotting"},
+			},
+		},
+		{
+			Category: "lifestyle",
+			Events: []CycleCatalogEvent{
+				{Code: "stress_high"},
+				{Code: "alcohol"},
+				{Code: "caffeine_high"},
+				{Code: "cravings_sweet"},
+				{Code: "cravings_salty"},
+			},
+		},
+		{
+			Category: "health",
+			Events: []CycleCatalogEvent{
+				{Code: "painkiller_taken"},
+				{Code: "hormonal_medication"},
+				{Code: "pregnancy_test"},
+			},
+		},
+	}
+
+	cycleCatalogMap = buildCycleCatalogMap(cycleCatalog)
 )
 
 type Service interface {
@@ -30,10 +172,23 @@ type Service interface {
 	UpdateActivity(ctx context.Context, a Activity) (*Activity, error)
 	DeleteActivity(ctx context.Context, id int64, userId string) error
 	GetActivity(ctx context.Context, userId string, from, to *time.Time) ([]Activity, error)
+	// workouts
+	CreateWorkout(ctx context.Context, w WorkoutCreate, today time.Time) (*Workout, error)
+	UpdateWorkout(ctx context.Context, id int64, w WorkoutCreate, today time.Time) (*Workout, error)
+	DeleteWorkout(ctx context.Context, id int64, userId string) error
+	GetWorkouts(ctx context.Context, userId string, from, to *time.Time) ([]Workout, error)
+	GetWorkoutDailySummary(ctx context.Context, userId string, date, today time.Time) (*WorkoutDailySummary, error)
 	// plateau history
 	GetPlateauHistory(ctx context.Context, userId string, from, to *time.Time) ([]PlateauEvent, error)
 	// BMI calculation
 	CalculateBMI(ctx context.Context, userId string) (*BMIResult, error)
+	// cycle tracking
+	GetCycleCatalog(ctx context.Context, userId string) ([]CycleCatalogCategory, error)
+	GetCycleSummary(ctx context.Context, userId string, at *time.Time) (*CycleSummary, error)
+	GetCycleDayLogs(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error)
+	UpsertCycleDay(ctx context.Context, userId string, input CycleDayUpsertInput) (*CycleDayLog, error)
+	StartCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error)
+	StopCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error)
 }
 
 type service struct {
@@ -88,6 +243,95 @@ func (s *service) DeleteActivity(ctx context.Context, id int64, userId string) e
 func (s *service) GetActivity(ctx context.Context, userId string, from, to *time.Time) ([]Activity, error) {
 	return s.repo.GetActivity(ctx, userId, from, to)
 }
+
+func (s *service) CreateWorkout(ctx context.Context, w WorkoutCreate, today time.Time) (*Workout, error) {
+	normalized, err := normalizeWorkoutInput(w)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateWorkoutDateNotFuture(normalized.LoggedAt, today); err != nil {
+		return nil, err
+	}
+	return s.repo.CreateWorkout(ctx, normalized)
+}
+
+func (s *service) UpdateWorkout(ctx context.Context, id int64, w WorkoutCreate, today time.Time) (*Workout, error) {
+	if id <= 0 {
+		return nil, ErrWorkoutInputInvalid
+	}
+	normalized, err := normalizeWorkoutInput(w)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateWorkoutDateNotFuture(normalized.LoggedAt, today); err != nil {
+		return nil, err
+	}
+	return s.repo.UpdateWorkout(ctx, normalized, id)
+}
+
+func (s *service) DeleteWorkout(ctx context.Context, id int64, userId string) error {
+	if id <= 0 {
+		return ErrWorkoutInputInvalid
+	}
+	return s.repo.DeleteWorkout(ctx, id, userId)
+}
+
+func (s *service) GetWorkouts(ctx context.Context, userId string, from, to *time.Time) ([]Workout, error) {
+	var fromDate *time.Time
+	var toDate *time.Time
+	if from != nil {
+		v := dateOnly(*from)
+		fromDate = &v
+	}
+	if to != nil {
+		v := dateOnly(*to)
+		toDate = &v
+	}
+	if fromDate != nil && toDate != nil && fromDate.After(*toDate) {
+		return nil, ErrWorkoutInputInvalid
+	}
+	return s.repo.GetWorkouts(ctx, userId, fromDate, toDate)
+}
+
+func (s *service) GetWorkoutDailySummary(ctx context.Context, userId string, date, today time.Time) (*WorkoutDailySummary, error) {
+	date = dateOnly(date)
+	today = dateOnly(today)
+
+	baseLimit, err := s.repo.GetLatestWaterLimit(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+	if baseLimit <= 0 {
+		baseLimit = defaultWaterLimitMl
+	}
+
+	totalDuration, err := s.repo.GetWorkoutTotalDurationByDate(ctx, userId, date)
+	if err != nil {
+		return nil, err
+	}
+
+	applied := date.Equal(today)
+	waterBonus := 0
+	if applied {
+		waterBonus = totalDuration * workoutWaterBonusPerMinute
+	}
+
+	effectiveLimit := baseLimit + waterBonus
+	if effectiveLimit > workoutWaterLimitMaxMl {
+		effectiveLimit = workoutWaterLimitMaxMl
+	}
+
+	return &WorkoutDailySummary{
+		Date:                  date.Format("2006-01-02"),
+		TotalDurationMin:      totalDuration,
+		BaseWaterLimitMl:      baseLimit,
+		WaterBonusMl:          waterBonus,
+		EffectiveWaterLimitMl: effectiveLimit,
+		MaxWaterLimitMl:       workoutWaterLimitMaxMl,
+		Applied:               applied,
+	}, nil
+}
+
 func (s *service) GetPlateauHistory(ctx context.Context, userId string, from, to *time.Time) ([]PlateauEvent, error) {
 	return s.repo.GetPlateauHistory(ctx, userId, from, to)
 }
@@ -169,15 +413,23 @@ func (s *service) EvaluatePlateau(ctx context.Context, userId string) (*PlateauR
 	dailyProt, _ := s.repo.GetDailyProtein(ctx, userId, start, end)
 	dailySteps, _ := s.repo.GetDailySteps(ctx, userId, start, end)
 	dailySleep, _ := s.repo.GetDailySleepMin(ctx, userId, start, end)
+	periodDays, err := s.repo.GetPeriodDays(ctx, userId, start, end)
+	if err != nil {
+		return nil, err
+	}
 	calsGood := 0
 	protGood := 0
-	lower := 0.9 * targetCalories
-	upper := 1.1 * targetCalories
 	proteinTarget := 1.6 * profileWeight
 	// iterate days in window
 	for d := 0; d < windowDays; d++ {
 		day := start.AddDate(0, 0, d).Format("2006-01-02")
-		if v, ok := dailyCals[day]; ok && targetCalories > 0 && v >= lower && v <= upper {
+		targetForDay := targetCalories
+		if periodDays[day] {
+			targetForDay = effectiveCaloriesTarget(targetCalories)
+		}
+		lower := 0.9 * targetForDay
+		upper := 1.1 * targetForDay
+		if v, ok := dailyCals[day]; ok && targetForDay > 0 && v >= lower && v <= upper {
 			calsGood++
 		}
 		if v, ok := dailyProt[day]; ok && proteinTarget > 0 && v >= proteinTarget {
@@ -328,4 +580,507 @@ func (s *service) CalculateBMI(ctx context.Context, userId string) (*BMIResult, 
 		DiffFromMin:      diffFromMin,
 		DiffFromMax:      diffFromMax,
 	}, nil
+}
+
+// ===== Cycle tracking =====
+func (s *service) GetCycleCatalog(ctx context.Context, userId string) ([]CycleCatalogCategory, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+	return cloneCycleCatalog(cycleCatalog), nil
+}
+
+func (s *service) GetCycleSummary(ctx context.Context, userId string, at *time.Time) (*CycleSummary, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	day := time.Now()
+	if at != nil {
+		day = *at
+	}
+	day = dateOnly(day)
+	dayKey := day.Format("2006-01-02")
+
+	periodDays, err := s.repo.GetPeriodDays(ctx, userId, day, day)
+	if err != nil {
+		return nil, err
+	}
+	isPeriodDay := periodDays[dayKey]
+
+	goals, err := s.repo.GetLatestMacroGoals(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	cycles, err := s.repo.GetCycles(ctx, userId, nil, nil, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	cycleLen, periodLen, confidence := deriveCycleForecast(cycles)
+	currentCycle := findCycleForDay(cycles, day)
+	latestStart := latestCycleStart(cycles)
+
+	summary := &CycleSummary{
+		Date:             dayKey,
+		IsPeriodDay:      isPeriodDay,
+		CycleLengthDays:  cycleLen,
+		PeriodLengthDays: periodLen,
+		Confidence:       confidence,
+		BaseGoals:        goals,
+		EffectiveGoals:   applyPeriodGoals(goals, isPeriodDay),
+	}
+
+	if currentCycle != nil {
+		start := currentCycle.StartDate.Format("2006-01-02")
+		summary.CurrentCycleStart = &start
+		if currentCycle.EndDate != nil {
+			end := currentCycle.EndDate.Format("2006-01-02")
+			summary.CurrentCycleEnd = &end
+		}
+		if currentCycle.EndDate == nil {
+			predictedPeriodEnd := currentCycle.StartDate.AddDate(0, 0, periodLen-1).Format("2006-01-02")
+			summary.PredictedPeriodEnd = &predictedPeriodEnd
+		}
+	}
+
+	if latestStart != nil {
+		nextStart := latestStart.AddDate(0, 0, cycleLen).Format("2006-01-02")
+		summary.PredictedNextStart = &nextStart
+	}
+
+	return summary, nil
+}
+
+func (s *service) GetCycleDayLogs(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	var fromDate *time.Time
+	var toDate *time.Time
+	if from != nil {
+		v := dateOnly(*from)
+		fromDate = &v
+	}
+	if to != nil {
+		v := dateOnly(*to)
+		toDate = &v
+	}
+	if fromDate != nil && toDate != nil && fromDate.After(*toDate) {
+		return nil, ErrCycleInputInvalid
+	}
+
+	return s.repo.GetCycleDayLogs(ctx, userId, fromDate, toDate)
+}
+
+func (s *service) UpsertCycleDay(ctx context.Context, userId string, input CycleDayUpsertInput) (*CycleDayLog, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	normalized, err := normalizeCycleDayInput(input)
+	if err != nil {
+		return nil, err
+	}
+
+	dayLogID, err := s.repo.UpsertCycleDayLog(
+		ctx,
+		userId,
+		normalized.LoggedAt,
+		normalized.FlowIntensity,
+		normalized.Note,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.ReplaceCycleDayEvents(ctx, dayLogID, normalized.Events); err != nil {
+		return nil, err
+	}
+
+	from := normalized.LoggedAt
+	to := normalized.LoggedAt
+	logs, err := s.repo.GetCycleDayLogs(ctx, userId, &from, &to)
+	if err != nil {
+		return nil, err
+	}
+	if len(logs) == 0 {
+		return &CycleDayLog{
+			Id:       dayLogID,
+			LoggedAt: normalized.LoggedAt.Format("2006-01-02"),
+			Events:   []CycleDailyEvent{},
+		}, nil
+	}
+	return &logs[0], nil
+}
+
+func (s *service) StartCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	when := at
+	if when.IsZero() {
+		when = time.Now()
+	}
+	when = dateOnly(when)
+
+	if err := s.repo.StartCycle(ctx, userId, when); err != nil {
+		return nil, err
+	}
+	return s.GetCycleSummary(ctx, userId, &when)
+}
+
+func (s *service) StopCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	when := at
+	if when.IsZero() {
+		when = time.Now()
+	}
+	when = dateOnly(when)
+
+	openCycle, err := s.repo.GetOpenCycle(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+	if openCycle == nil {
+		return nil, ErrCycleNoActive
+	}
+	if when.Before(dateOnly(openCycle.StartDate)) {
+		return nil, ErrCycleDateInvalid
+	}
+
+	if _, err := s.repo.StopCycle(ctx, userId, when); err != nil {
+		return nil, err
+	}
+	return s.GetCycleSummary(ctx, userId, &when)
+}
+
+func (s *service) ensureFemaleCycleAccess(ctx context.Context, userId string) error {
+	gender, err := s.repo.GetLatestGender(ctx, userId)
+	if err != nil {
+		return err
+	}
+	if strings.ToLower(strings.TrimSpace(gender)) != "female" {
+		return ErrCycleForbidden
+	}
+	return nil
+}
+
+func normalizeWorkoutInput(input WorkoutCreate) (WorkoutCreate, error) {
+	out := input
+	out.LoggedAt = dateOnly(out.LoggedAt)
+
+	if out.DurationMin <= 0 || out.DurationMin > maxWorkoutDurationMin {
+		return WorkoutCreate{}, ErrWorkoutInputInvalid
+	}
+
+	workoutType := strings.ToLower(strings.TrimSpace(out.WorkoutType))
+	if _, ok := allowedWorkoutTypes[workoutType]; !ok {
+		return WorkoutCreate{}, ErrWorkoutInputInvalid
+	}
+	out.WorkoutType = workoutType
+
+	if out.Intensity != nil {
+		intensity := strings.ToLower(strings.TrimSpace(*out.Intensity))
+		if intensity == "" {
+			out.Intensity = nil
+		} else {
+			if _, ok := allowedEventIntensity[intensity]; !ok {
+				return WorkoutCreate{}, ErrWorkoutInputInvalid
+			}
+			out.Intensity = &intensity
+		}
+	}
+
+	if out.CaloriesBurned != nil && *out.CaloriesBurned < 0 {
+		return WorkoutCreate{}, ErrWorkoutInputInvalid
+	}
+
+	if out.Note != nil {
+		note := strings.TrimSpace(*out.Note)
+		if note == "" {
+			out.Note = nil
+		} else {
+			if len([]rune(note)) > maxWorkoutNoteLength {
+				return WorkoutCreate{}, ErrWorkoutInputInvalid
+			}
+			out.Note = &note
+		}
+	}
+
+	return out, nil
+}
+
+func validateWorkoutDateNotFuture(loggedAt, today time.Time) error {
+	if dateOnly(loggedAt).After(dateOnly(today)) {
+		return ErrWorkoutFutureDate
+	}
+	return nil
+}
+
+func normalizeCycleDayInput(input CycleDayUpsertInput) (CycleDayUpsertInput, error) {
+	loggedAt := input.LoggedAt
+	if loggedAt.IsZero() {
+		loggedAt = time.Now()
+	}
+	out := CycleDayUpsertInput{
+		LoggedAt: dateOnly(loggedAt),
+		Events:   make([]CycleDayEventInput, 0, len(input.Events)),
+	}
+
+	if input.FlowIntensity != nil {
+		flow := strings.ToLower(strings.TrimSpace(*input.FlowIntensity))
+		if flow != "" {
+			if _, ok := allowedFlowIntensity[flow]; !ok {
+				return CycleDayUpsertInput{}, ErrCycleInputInvalid
+			}
+			out.FlowIntensity = &flow
+		}
+	}
+
+	if input.Note != nil {
+		note := strings.TrimSpace(*input.Note)
+		if note != "" {
+			out.Note = &note
+		}
+	}
+
+	for _, event := range input.Events {
+		category := strings.ToLower(strings.TrimSpace(event.EventCategory))
+		code := strings.ToLower(strings.TrimSpace(event.EventCode))
+		if category == "" || code == "" {
+			return CycleDayUpsertInput{}, ErrCycleInputInvalid
+		}
+		validCodes, ok := cycleCatalogMap[category]
+		if !ok {
+			return CycleDayUpsertInput{}, ErrCycleInputInvalid
+		}
+		if _, ok := validCodes[code]; !ok {
+			return CycleDayUpsertInput{}, ErrCycleInputInvalid
+		}
+
+		quantity := event.Quantity
+		if quantity <= 0 {
+			quantity = 1
+		}
+
+		var intensity *string
+		if event.Intensity != nil {
+			v := strings.ToLower(strings.TrimSpace(*event.Intensity))
+			if v != "" {
+				if _, ok := allowedEventIntensity[v]; !ok {
+					return CycleDayUpsertInput{}, ErrCycleInputInvalid
+				}
+				intensity = &v
+			}
+		}
+
+		out.Events = append(out.Events, CycleDayEventInput{
+			EventCategory: category,
+			EventCode:     code,
+			Quantity:      quantity,
+			Intensity:     intensity,
+		})
+	}
+
+	return out, nil
+}
+
+func buildCycleCatalogMap(catalog []CycleCatalogCategory) map[string]map[string]struct{} {
+	result := make(map[string]map[string]struct{}, len(catalog))
+	for _, category := range catalog {
+		events := make(map[string]struct{}, len(category.Events))
+		for _, event := range category.Events {
+			events[event.Code] = struct{}{}
+		}
+		result[category.Category] = events
+	}
+	return result
+}
+
+func cloneCycleCatalog(src []CycleCatalogCategory) []CycleCatalogCategory {
+	out := make([]CycleCatalogCategory, 0, len(src))
+	for _, category := range src {
+		copiedEvents := make([]CycleCatalogEvent, len(category.Events))
+		copy(copiedEvents, category.Events)
+		out = append(out, CycleCatalogCategory{
+			Category: category.Category,
+			Events:   copiedEvents,
+		})
+	}
+	return out
+}
+
+func deriveCycleForecast(cycles []Cycle) (int, int, string) {
+	cycleLen := defaultCycleLengthDays
+	periodLen := defaultPeriodLengthDays
+
+	if len(cycles) > 0 {
+		starts := make([]time.Time, 0, len(cycles))
+		for _, cycle := range cycles {
+			starts = append(starts, dateOnly(cycle.StartDate))
+		}
+		sort.Slice(starts, func(i, j int) bool {
+			return starts[i].Before(starts[j])
+		})
+
+		intervals := make([]int, 0, len(starts)-1)
+		for i := 1; i < len(starts); i++ {
+			days := int(starts[i].Sub(starts[i-1]).Hours() / 24)
+			if days > 0 {
+				intervals = append(intervals, days)
+			}
+		}
+		if len(intervals) > 6 {
+			intervals = intervals[len(intervals)-6:]
+		}
+		if len(intervals) > 0 {
+			cycleLen = clampInt(medianInt(intervals), 21, 45)
+		}
+
+		type duration struct {
+			start time.Time
+			days  int
+		}
+		durations := make([]duration, 0, len(cycles))
+		for _, cycle := range cycles {
+			if cycle.EndDate == nil {
+				continue
+			}
+			endDate := dateOnly(*cycle.EndDate)
+			startDate := dateOnly(cycle.StartDate)
+			if endDate.Before(startDate) {
+				continue
+			}
+			durations = append(durations, duration{
+				start: startDate,
+				days:  int(endDate.Sub(startDate).Hours()/24) + 1,
+			})
+		}
+		sort.Slice(durations, func(i, j int) bool {
+			return durations[i].start.After(durations[j].start)
+		})
+		if len(durations) > 6 {
+			durations = durations[:6]
+		}
+		if len(durations) > 0 {
+			vals := make([]int, 0, len(durations))
+			for _, d := range durations {
+				vals = append(vals, d.days)
+			}
+			periodLen = clampInt(medianInt(vals), 2, 10)
+		}
+	}
+
+	return cycleLen, periodLen, cycleConfidence(len(cycles))
+}
+
+func findCycleForDay(cycles []Cycle, day time.Time) *Cycle {
+	for _, cycle := range cycles {
+		startDate := dateOnly(cycle.StartDate)
+		if cycle.EndDate == nil {
+			if !day.Before(startDate) {
+				copyCycle := cycle
+				return &copyCycle
+			}
+			continue
+		}
+		endDate := dateOnly(*cycle.EndDate)
+		if !day.Before(startDate) && !day.After(endDate) {
+			copyCycle := cycle
+			return &copyCycle
+		}
+	}
+	return nil
+}
+
+func latestCycleStart(cycles []Cycle) *time.Time {
+	if len(cycles) == 0 {
+		return nil
+	}
+	latest := dateOnly(cycles[0].StartDate)
+	for i := 1; i < len(cycles); i++ {
+		current := dateOnly(cycles[i].StartDate)
+		if current.After(latest) {
+			latest = current
+		}
+	}
+	return &latest
+}
+
+func applyPeriodGoals(base CycleGoals, isPeriodDay bool) CycleGoals {
+	if !isPeriodDay {
+		return base
+	}
+	effectiveCalories := effectiveCaloriesTarget(base.Calories)
+	if base.Calories <= 0 {
+		return CycleGoals{
+			Calories: effectiveCalories,
+			Protein:  base.Protein,
+			Fat:      base.Fat,
+			Carbs:    base.Carbs,
+		}
+	}
+	multiplier := effectiveCalories / base.Calories
+	return CycleGoals{
+		Calories: effectiveCalories,
+		Protein:  math.Round(base.Protein * multiplier),
+		Fat:      math.Round(base.Fat * multiplier),
+		Carbs:    math.Round(base.Carbs * multiplier),
+	}
+}
+
+func effectiveCaloriesTarget(baseCalories float64) float64 {
+	if baseCalories <= 0 {
+		return baseCalories
+	}
+	return roundTo10(baseCalories * periodCaloriesMultiplier)
+}
+
+func roundTo10(value float64) float64 {
+	return math.Round(value/10.0) * 10.0
+}
+
+func cycleConfidence(historyCount int) string {
+	switch {
+	case historyCount >= 6:
+		return "high"
+	case historyCount >= 3:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func medianInt(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	copyVals := append([]int(nil), values...)
+	sort.Ints(copyVals)
+	mid := len(copyVals) / 2
+	if len(copyVals)%2 == 1 {
+		return copyVals[mid]
+	}
+	return int(math.Round(float64(copyVals[mid-1]+copyVals[mid]) / 2.0))
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func dateOnly(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }

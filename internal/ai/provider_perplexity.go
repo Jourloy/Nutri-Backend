@@ -634,3 +634,197 @@ func (p *PerplexityProvider) GenerateArticle(ctx context.Context, req GenerateAr
 
 	return &article, nil
 }
+
+func (p *PerplexityProvider) GenerateRecipeDraft(ctx context.Context, req GenerateRecipeDraftRequest) (*GeneratedRecipeDraft, error) {
+	imageURL := strings.TrimSpace(req.ImageURL)
+	if imageBase64 := strings.TrimSpace(req.ImageBase64); imageBase64 != "" {
+		// Prefer inline base64 to avoid provider-side fetch issues with private/presigned URLs.
+		imageURL = "data:image/jpeg;base64," + imageBase64
+	}
+	if imageURL == "" {
+		return nil, fmt.Errorf("image is required")
+	}
+
+	userTextContent := fmt.Sprintf("Title (RU): %s\n\nIngredients (RU):\n%s\n\nSteps (RU):\n%s",
+		strings.TrimSpace(req.TitleRu),
+		strings.TrimSpace(req.IngredientsRu),
+		strings.TrimSpace(req.StepsRu),
+	)
+
+	userContent := []map[string]interface{}{
+		{
+			"type": "text",
+			"text": userTextContent,
+		},
+		{
+			"type": "image_url",
+			"image_url": map[string]string{
+				"url": imageURL,
+			},
+		},
+	}
+
+	jsonSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"titleRu":           map[string]interface{}{"type": "string"},
+			"titleEn":           map[string]interface{}{"type": "string"},
+			"descriptionRu":     map[string]interface{}{"type": "string"},
+			"descriptionEn":     map[string]interface{}{"type": "string"},
+			"slug":              map[string]interface{}{"type": "string"},
+			"prepTime":          map[string]interface{}{"type": []string{"integer", "null"}},
+			"cookTime":          map[string]interface{}{"type": []string{"integer", "null"}},
+			"totalTime":         map[string]interface{}{"type": []string{"integer", "null"}},
+			"servings":          map[string]interface{}{"type": "integer"},
+			"servingsUnit":      map[string]interface{}{"type": "string"},
+			"difficulty":        map[string]interface{}{"type": []string{"string", "null"}},
+			"calories":          map[string]interface{}{"type": []string{"number", "null"}},
+			"protein":           map[string]interface{}{"type": []string{"number", "null"}},
+			"fat":               map[string]interface{}{"type": []string{"number", "null"}},
+			"carbs":             map[string]interface{}{"type": []string{"number", "null"}},
+			"fiber":             map[string]interface{}{"type": []string{"number", "null"}},
+			"metaDescriptionRu": map[string]interface{}{"type": "string"},
+			"metaDescriptionEn": map[string]interface{}{"type": "string"},
+			"ingredients": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"sortOrder":  map[string]interface{}{"type": "integer"},
+						"nameRu":     map[string]interface{}{"type": "string"},
+						"nameEn":     map[string]interface{}{"type": "string"},
+						"amount":     map[string]interface{}{"type": []string{"number", "null"}},
+						"unit":       map[string]interface{}{"type": []string{"string", "null"}},
+						"isOptional": map[string]interface{}{"type": "boolean"},
+						"groupName":  map[string]interface{}{"type": []string{"string", "null"}},
+					},
+					"required":             []string{"sortOrder", "nameRu", "nameEn", "amount", "unit", "isOptional", "groupName"},
+					"additionalProperties": false,
+				},
+			},
+			"steps": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"stepNumber":      map[string]interface{}{"type": "integer"},
+						"instructionRu":   map[string]interface{}{"type": "string"},
+						"instructionEn":   map[string]interface{}{"type": "string"},
+						"durationMinutes": map[string]interface{}{"type": []string{"integer", "null"}},
+					},
+					"required":             []string{"stepNumber", "instructionRu", "instructionEn", "durationMinutes"},
+					"additionalProperties": false,
+				},
+			},
+			"categorySuggestion": map[string]interface{}{"type": []string{"string", "null"}},
+			"tagSuggestions": map[string]interface{}{
+				"type":  "array",
+				"items": map[string]interface{}{"type": "string"},
+			},
+		},
+		"required": []string{
+			"titleRu",
+			"titleEn",
+			"descriptionRu",
+			"descriptionEn",
+			"slug",
+			"prepTime",
+			"cookTime",
+			"totalTime",
+			"servings",
+			"servingsUnit",
+			"difficulty",
+			"calories",
+			"protein",
+			"fat",
+			"carbs",
+			"fiber",
+			"metaDescriptionRu",
+			"metaDescriptionEn",
+			"ingredients",
+			"steps",
+			"categorySuggestion",
+			"tagSuggestions",
+		},
+		"additionalProperties": false,
+	}
+
+	payload := map[string]interface{}{
+		"model": "sonar-pro",
+		"messages": []map[string]interface{}{
+			{"role": "system", "content": generateRecipeDraftSystemPrompt},
+			{"role": "user", "content": userContent},
+		},
+		"max_tokens":  3500,
+		"temperature": 0.2,
+		"response_format": map[string]interface{}{
+			"type": "json_schema",
+			"json_schema": map[string]interface{}{
+				"name":   "generated_recipe_draft",
+				"schema": jsonSchema,
+				"strict": true,
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		"https://api.perplexity.ai/chat/completions", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, body)
+	}
+
+	var apiResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	if len(apiResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from perplexity")
+	}
+
+	content := StripMarkdownCodeFences(apiResp.Choices[0].Message.Content)
+	if content == "" {
+		return nil, fmt.Errorf("empty response from perplexity")
+	}
+
+	var draft GeneratedRecipeDraft
+	if err := ParseJSONResponse(content, &draft); err != nil {
+		p.logger.Error("failed to parse AI recipe draft", "error", err, "rawContent", content)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	draftNormalized := NormalizeGeneratedRecipeDraft(&draft)
+	if draftNormalized == nil {
+		return nil, fmt.Errorf("empty recipe draft")
+	}
+	if len(draftNormalized.Ingredients) == 0 || len(draftNormalized.Steps) == 0 {
+		return nil, fmt.Errorf("incomplete recipe draft generated")
+	}
+
+	return draftNormalized, nil
+}

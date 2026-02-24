@@ -29,6 +29,7 @@ type Service interface {
 	GetUserAnalysisHistory(ctx context.Context, userId string, limit int) ([]AnalysisLog, error)
 	ImproveText(ctx context.Context, userId string, html string) (string, error)
 	GenerateArticle(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error)
+	GenerateRecipeDraft(ctx context.Context, userId string, titleRu, ingredientsRu, stepsRu string, imageData []byte, imageURL, provider string) (*GeneratedRecipeDraft, error)
 }
 
 type service struct {
@@ -448,7 +449,7 @@ func (s *service) ImproveText(ctx context.Context, userId string, html string) (
 	return s.aiProvider.ImproveText(ctx, html)
 }
 
-func (s *service) selectArticleProvider(provider string) (AIProvider, error) {
+func (s *service) selectGenerationProvider(provider string) (AIProvider, error) {
 	p := strings.ToLower(strings.TrimSpace(provider))
 	if p == "" || p == "auto" {
 		return s.aiProvider, nil
@@ -487,7 +488,7 @@ func (s *service) GenerateArticle(ctx context.Context, userId string, topic stri
 		return nil, fmt.Errorf("description is too long")
 	}
 
-	p, err := s.selectArticleProvider(provider)
+	p, err := s.selectGenerationProvider(provider)
 	if err != nil {
 		return nil, err
 	}
@@ -516,6 +517,85 @@ func (s *service) GenerateArticle(ctx context.Context, userId string, topic stri
 	}
 
 	return article, nil
+}
+
+func (s *service) GenerateRecipeDraft(
+	ctx context.Context,
+	userId string,
+	titleRu, ingredientsRu, stepsRu string,
+	imageData []byte,
+	imageURL, provider string,
+) (*GeneratedRecipeDraft, error) {
+	titleRu = strings.TrimSpace(titleRu)
+	ingredientsRu = strings.TrimSpace(ingredientsRu)
+	stepsRu = strings.TrimSpace(stepsRu)
+	imageURL = strings.TrimSpace(imageURL)
+	provider = strings.ToLower(strings.TrimSpace(provider))
+
+	if titleRu == "" {
+		return nil, fmt.Errorf("titleRu is required")
+	}
+	if ingredientsRu == "" {
+		return nil, fmt.Errorf("ingredientsRu is required")
+	}
+	if stepsRu == "" {
+		return nil, fmt.Errorf("stepsRu is required")
+	}
+	if len(titleRu) > 500 {
+		return nil, fmt.Errorf("titleRu is too long")
+	}
+	if len(ingredientsRu) > 10_000 {
+		return nil, fmt.Errorf("ingredientsRu is too long")
+	}
+	if len(stepsRu) > 20_000 {
+		return nil, fmt.Errorf("stepsRu is too long")
+	}
+	if len(imageData) == 0 && imageURL == "" {
+		return nil, fmt.Errorf("image or imageUrl is required")
+	}
+
+	var imageBase64 string
+	if len(imageData) > 0 {
+		uploadedImageURL, encodedImage, err := s.processAndUploadImage(ctx, userId, imageData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process image: %w", err)
+		}
+		imageURL = uploadedImageURL
+		imageBase64 = encodedImage
+	}
+
+	selectedProvider, err := s.selectGenerationProvider(provider)
+	if err != nil {
+		return nil, err
+	}
+
+	draft, err := selectedProvider.GenerateRecipeDraft(ctx, GenerateRecipeDraftRequest{
+		TitleRu:       titleRu,
+		IngredientsRu: ingredientsRu,
+		StepsRu:       stepsRu,
+		ImageURL:      imageURL,
+		ImageBase64:   imageBase64,
+		Provider:      provider,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	draft = NormalizeGeneratedRecipeDraft(draft)
+	if draft == nil {
+		return nil, fmt.Errorf("empty recipe draft")
+	}
+	if draft.TitleRu == "" {
+		draft.TitleRu = titleRu
+	}
+	if draft.TitleEn == "" {
+		return nil, fmt.Errorf("incomplete recipe draft generated")
+	}
+	if len(draft.Ingredients) == 0 || len(draft.Steps) == 0 {
+		return nil, fmt.Errorf("incomplete recipe draft generated")
+	}
+
+	return draft, nil
 }
 
 // processAndUploadImage processes image (resize, compress) and uploads to Minio

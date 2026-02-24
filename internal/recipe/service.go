@@ -48,6 +48,7 @@ type Service interface {
 	UpdateTag(ctx context.Context, t TagUpdate) (*Tag, error)
 	DeleteTag(ctx context.Context, id int64, userId string) error
 	GetTags(ctx context.Context, userId *string) ([]Tag, error)
+	CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error)
 
 	// Recipes
 	CreateRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
@@ -64,6 +65,7 @@ type Service interface {
 	// Nutri Recipes (Public)
 	GetNutriRecipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error)
 	GetNutriRecipeBySlug(ctx context.Context, slug string) (*Recipe, error)
+	GetNutriRecipeById(ctx context.Context, id int64) (*Recipe, error)
 
 	// Admin
 	CreateNutriRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
@@ -314,6 +316,11 @@ func (s *service) DeleteTag(ctx context.Context, id int64, userId string) error 
 
 func (s *service) GetTags(ctx context.Context, userId *string) ([]Tag, error) {
 	return s.repo.GetTags(ctx, userId)
+}
+
+func (s *service) CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error) {
+	t.UserId = nil
+	return s.repo.CreateSystemTag(ctx, t)
 }
 
 // ===== Recipes =====
@@ -762,6 +769,24 @@ func (s *service) GetNutriRecipeBySlug(ctx context.Context, slug string) (*Recip
 	return s.loadRecipeWithRelations(ctx, recipe)
 }
 
+func (s *service) GetNutriRecipeById(ctx context.Context, id int64) (*Recipe, error) {
+	recipe, err := s.repo.GetRecipeById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	book, err := s.repo.GetNutriBook(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if recipe.BookId != book.Id {
+		return nil, fmt.Errorf("recipe not found")
+	}
+
+	return s.loadRecipeWithRelations(ctx, recipe)
+}
+
 // ===== Admin =====
 
 func (s *service) CreateNutriRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error) {
@@ -823,41 +848,21 @@ func (s *service) UpdateNutriRecipe(ctx context.Context, r RecipeUpdate) (*Recip
 		return nil, fmt.Errorf("not a Nutri recipe")
 	}
 
-	r.UserId = "" // Allow update without user check
+	// Resolve system category by name if provided.
+	if r.Category != nil && *r.Category != "" && r.CategoryId == nil {
+		cat, err := s.repo.GetCategoryByName(ctx, *r.Category, nil)
+		if err != nil {
+			s.logger.Warn("failed to resolve system category", "name", *r.Category, "error", err)
+		} else {
+			r.CategoryId = &cat.Id
+		}
+	}
 
-	// Temporarily bypass user check for Nutri recipes
-	recipe, err := s.repo.GetRecipeById(ctx, r.Id)
+	recipe, err := s.repo.UpdateNutriRecipe(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 
-	// Direct update without user check
-	const q = `
-		UPDATE recipes SET
-			slug = $1,
-			title_ru = $2,
-			title_en = $3,
-			description_ru = $4,
-			description_en = $5,
-			main_image_url = $6,
-			prep_time = $7,
-			cook_time = $8,
-			total_time = $9,
-			servings = $10,
-			servings_unit = $11,
-			calories = $12,
-			protein = $13,
-			fat = $14,
-			carbs = $15,
-			fiber = $16,
-			difficulty = $17,
-			category_id = $18,
-			meta_description_ru = $19,
-			meta_description_en = $20,
-			updated_at = NOW()
-		WHERE id = $21 AND deleted_at IS NULL`
-
-	// For now, just update steps, ingredients and tags
 	if err := s.repo.UpdateSteps(ctx, recipe.Id, r.Steps); err != nil {
 		s.logger.Error("failed to update steps", "recipeId", recipe.Id, "error", err)
 	}
@@ -870,7 +875,12 @@ func (s *service) UpdateNutriRecipe(ctx context.Context, r RecipeUpdate) (*Recip
 		s.logger.Error("failed to update recipe tags", "recipeId", recipe.Id, "error", err)
 	}
 
-	_ = q // TODO: implement direct update for Nutri recipes
+	if recipe.ShareToken == nil {
+		newToken := uuid.New().String()
+		if err := s.repo.SetRecipeShareToken(ctx, recipe.Id, newToken); err != nil {
+			s.logger.Warn("failed to set share token for Nutri recipe", "recipeId", recipe.Id, "error", err)
+		}
+	}
 
 	return s.loadRecipeWithRelations(ctx, recipe)
 }
@@ -891,8 +901,7 @@ func (s *service) DeleteNutriRecipe(ctx context.Context, id int64) error {
 		return fmt.Errorf("not a Nutri recipe")
 	}
 
-	// Direct delete without user check
-	return s.repo.DeleteRecipe(ctx, id, "")
+	return s.repo.DeleteNutriRecipe(ctx, id)
 }
 
 func (s *service) CreateSystemCategory(ctx context.Context, c CategoryCreate) (*Category, error) {

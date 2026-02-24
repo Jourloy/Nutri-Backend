@@ -375,3 +375,77 @@ func (p *OpenAIProvider) GenerateArticle(ctx context.Context, req GenerateArticl
 
 	return &article, nil
 }
+
+func (p *OpenAIProvider) GenerateRecipeDraft(ctx context.Context, req GenerateRecipeDraftRequest) (*GeneratedRecipeDraft, error) {
+	imageURL := strings.TrimSpace(req.ImageURL)
+	if imageBase64 := strings.TrimSpace(req.ImageBase64); imageBase64 != "" {
+		// Prefer inline base64 to avoid provider-side fetch issues with private/presigned URLs.
+		imageURL = "data:image/jpeg;base64," + imageBase64
+	}
+	if imageURL == "" {
+		return nil, fmt.Errorf("image is required")
+	}
+
+	userMessage := fmt.Sprintf("Title (RU): %s\n\nIngredients (RU):\n%s\n\nSteps (RU):\n%s",
+		strings.TrimSpace(req.TitleRu),
+		strings.TrimSpace(req.IngredientsRu),
+		strings.TrimSpace(req.StepsRu),
+	)
+
+	resp, err := p.client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4o,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleSystem,
+					Content: generateRecipeDraftSystemPrompt,
+				},
+				{
+					Role: openai.ChatMessageRoleUser,
+					MultiContent: []openai.ChatMessagePart{
+						{
+							Type: openai.ChatMessagePartTypeText,
+							Text: userMessage,
+						},
+						{
+							Type: openai.ChatMessagePartTypeImageURL,
+							ImageURL: &openai.ChatMessageImageURL{
+								URL:    imageURL,
+								Detail: openai.ImageURLDetailAuto,
+							},
+						},
+					},
+				},
+			},
+			MaxTokens:   3500,
+			Temperature: 0.2,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from openai")
+	}
+
+	content := StripMarkdownCodeFences(resp.Choices[0].Message.Content)
+	if content == "" {
+		return nil, fmt.Errorf("empty response from openai")
+	}
+
+	var draft GeneratedRecipeDraft
+	if err := ParseJSONResponse(content, &draft); err != nil {
+		return nil, fmt.Errorf("failed to parse openai response: %w", err)
+	}
+
+	draftNormalized := NormalizeGeneratedRecipeDraft(&draft)
+	if draftNormalized == nil {
+		return nil, fmt.Errorf("empty recipe draft")
+	}
+	if len(draftNormalized.Ingredients) == 0 || len(draftNormalized.Steps) == 0 {
+		return nil, fmt.Errorf("incomplete recipe draft generated")
+	}
+
+	return draftNormalized, nil
+}

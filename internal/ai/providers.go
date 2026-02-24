@@ -15,6 +15,7 @@ type AIProvider interface {
 	AnalyzeText(ctx context.Context, req TextAnalysisRequest) (*AnalysisResponse, error)
 	ImproveText(ctx context.Context, html string) (string, error)
 	GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error)
+	GenerateRecipeDraft(ctx context.Context, req GenerateRecipeDraftRequest) (*GeneratedRecipeDraft, error)
 	GetModelName() string
 	CalculateCost(promptTokens, completionTokens int) float64
 }

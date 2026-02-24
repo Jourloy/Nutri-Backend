@@ -29,6 +29,19 @@ func (p *fakeAIProviderForGenerateArticle) GenerateArticle(ctx context.Context, 
 	return p.out, nil
 }
 
+func (p *fakeAIProviderForGenerateArticle) GenerateRecipeDraft(ctx context.Context, req GenerateRecipeDraftRequest) (*GeneratedRecipeDraft, error) {
+	return &GeneratedRecipeDraft{
+		TitleRu: req.TitleRu,
+		TitleEn: "EN title",
+		Ingredients: []GeneratedRecipeIngredient{
+			{SortOrder: 1, NameRu: "Ингредиент"},
+		},
+		Steps: []GeneratedRecipeStep{
+			{StepNumber: 1, InstructionRu: "Шаг"},
+		},
+	}, nil
+}
+
 func (p *fakeAIProviderForGenerateArticle) GetModelName() string { return "fake" }
 
 func (p *fakeAIProviderForGenerateArticle) CalculateCost(promptTokens, completionTokens int) float64 {
