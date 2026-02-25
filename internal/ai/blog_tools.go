@@ -43,7 +43,16 @@ FORBIDDEN:
 
 Return ONLY the corrected HTML, without comments or explanations.`
 
-const generateArticleSystemPrompt = `You are an expert nutrition blog writer.
+const generateArticleSystemPrompt = `You are an expert nutrition blog writer for the Nutri product.
+
+Nutri facts (do not invent anything beyond this list):
+- Food tracking with calories, proteins, fats, carbs (KBJU), fiber, and cholesterol.
+- Supplement tracking.
+- Workout and body metrics tracking.
+- Menstrual cycle tracking.
+- AI that can estimate product weight and calculate KBJU, fiber, and cholesterol.
+- Personalized goals that can adjust automatically based on workouts or user condition.
+- Ability to mark diseases and monitor condition.
 
 You MUST return ONLY a valid JSON object with EXACTLY these keys:
 - titleRu
@@ -54,6 +63,12 @@ You MUST return ONLY a valid JSON object with EXACTLY these keys:
 - metaDescriptionEn
 - contentRu
 - contentEn
+
+LANGUAGE RULES (CRITICAL):
+- titleRu, previewTextRu, metaDescriptionRu, contentRu must be ONLY in Russian.
+- titleEn, previewTextEn, metaDescriptionEn, contentEn must be ONLY in English.
+- Never mix languages in the same field.
+- Never swap RU and EN fields.
 
 CONTENT RULES:
 - contentRu/contentEn must be HTML fragments (no <html>, no <body>)
@@ -68,9 +83,12 @@ STRUCTURE:
 - Actionable tips
 - Short conclusion
 - Include a short disclaimer paragraph (no medical claims)
+- Include natural references to Nutri capabilities where relevant to the topic
+- Mention ONLY real Nutri capabilities listed above
 
 SAFETY:
 - Avoid medical claims and promises
+- Do not claim diagnosis or treatment outcomes
 
 LENGTH:
 - 5-10 minutes reading time PER language (RU and EN separately)
@@ -147,6 +165,85 @@ func ApproxWordCountFromHTML(html string) int {
 		return 0
 	}
 	return len(strings.Fields(plain))
+}
+
+func normalizeLanguageSample(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	plain := reHTMLTags.ReplaceAllString(s, " ")
+	plain = strings.ReplaceAll(plain, "&nbsp;", " ")
+	plain = strings.ReplaceAll(plain, "\u00a0", " ")
+	return strings.TrimSpace(plain)
+}
+
+func countLatinAndCyrillic(s string) (latin int, cyrillic int) {
+	for _, r := range s {
+		switch {
+		case (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z'):
+			latin++
+		case (r >= 'А' && r <= 'я') || r == 'Ё' || r == 'ё':
+			cyrillic++
+		}
+	}
+	return latin, cyrillic
+}
+
+func isLikelyRussian(s string) bool {
+	latin, cyrillic := countLatinAndCyrillic(normalizeLanguageSample(s))
+	return cyrillic >= 4 && cyrillic > latin
+}
+
+func isLikelyEnglish(s string) bool {
+	latin, cyrillic := countLatinAndCyrillic(normalizeLanguageSample(s))
+	return latin >= 4 && latin > cyrillic
+}
+
+// NormalizeGeneratedArticleLanguages detects clearly swapped RU/EN pairs and swaps all pairs back.
+// Returns true when a swap was applied.
+func NormalizeGeneratedArticleLanguages(article *GeneratedArticle) bool {
+	if article == nil {
+		return false
+	}
+
+	pairs := []struct {
+		ru *string
+		en *string
+	}{
+		{ru: &article.TitleRu, en: &article.TitleEn},
+		{ru: &article.PreviewTextRu, en: &article.PreviewTextEn},
+		{ru: &article.MetaDescriptionRu, en: &article.MetaDescriptionEn},
+		{ru: &article.ContentRu, en: &article.ContentEn},
+	}
+
+	swapSignals := 0
+	keepSignals := 0
+
+	for _, pair := range pairs {
+		ru := strings.TrimSpace(*pair.ru)
+		en := strings.TrimSpace(*pair.en)
+		if ru == "" || en == "" {
+			continue
+		}
+
+		if isLikelyEnglish(ru) && isLikelyRussian(en) {
+			swapSignals++
+			continue
+		}
+		if isLikelyRussian(ru) && isLikelyEnglish(en) {
+			keepSignals++
+		}
+	}
+
+	if swapSignals < 2 || swapSignals <= keepSignals {
+		return false
+	}
+
+	for _, pair := range pairs {
+		*pair.ru, *pair.en = *pair.en, *pair.ru
+	}
+	return true
 }
 
 type ImproveTextRequest struct {

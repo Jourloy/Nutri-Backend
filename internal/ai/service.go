@@ -509,6 +509,13 @@ func (s *service) GenerateArticle(ctx context.Context, userId string, topic stri
 	article.PreviewTextEn = StripTrailingCharCount(article.PreviewTextEn)
 	article.MetaDescriptionRu = StripTrailingCharCount(article.MetaDescriptionRu)
 	article.MetaDescriptionEn = StripTrailingCharCount(article.MetaDescriptionEn)
+	if NormalizeGeneratedArticleLanguages(article) && s.logger != nil {
+		s.logger.Warn(
+			"GenerateArticle detected swapped RU/EN fields and normalized response",
+			"provider",
+			strings.ToLower(strings.TrimSpace(provider)),
+		)
+	}
 
 	ruWords := ApproxWordCountFromHTML(article.ContentRu)
 	enWords := ApproxWordCountFromHTML(article.ContentEn)

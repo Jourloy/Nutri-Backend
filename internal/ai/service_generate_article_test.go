@@ -123,3 +123,41 @@ func TestGenerateArticle_SelectsProvider_AndSanitizesSuffixes(t *testing.T) {
 		t.Fatalf("expected primary called again for auto; got %d", primary.calls)
 	}
 }
+
+func TestGenerateArticle_NormalizesSwappedLanguages(t *testing.T) {
+	provider := &fakeAIProviderForGenerateArticle{
+		out: &GeneratedArticle{
+			TitleRu:           "Smart goal tracking with Nutri",
+			TitleEn:           "Как Nutri помогает считать КБЖУ и клетчатку",
+			PreviewTextRu:     "Nutri helps track workouts and supplements with adaptive goals.",
+			PreviewTextEn:     "Nutri помогает отслеживать тренировки, добавки и персональные цели.",
+			MetaDescriptionRu: "Track calories, workouts, and cycle in one app with Nutri.",
+			MetaDescriptionEn: "Как в Nutri отслеживать КБЖУ, клетчатку и холестерин каждый день.",
+			ContentRu:         "<h2>Nutri Features</h2><p>Track calories and workouts daily.</p>",
+			ContentEn:         "<h2>Возможности Nutri</h2><p>Отслеживайте КБЖУ и тренировки каждый день.</p>",
+		},
+	}
+
+	s := &service{
+		aiProvider:     provider,
+		aiProviderName: "openai",
+	}
+
+	article, err := s.GenerateArticle(context.Background(), "admin", "topic", "desc", "openai")
+	if err != nil {
+		t.Fatalf("GenerateArticle returned error: %v", err)
+	}
+
+	if article.TitleRu != "Как Nutri помогает считать КБЖУ и клетчатку" {
+		t.Fatalf("expected normalized TitleRu, got %q", article.TitleRu)
+	}
+	if article.TitleEn != "Smart goal tracking with Nutri" {
+		t.Fatalf("expected normalized TitleEn, got %q", article.TitleEn)
+	}
+	if article.PreviewTextRu != "Nutri помогает отслеживать тренировки, добавки и персональные цели." {
+		t.Fatalf("expected normalized PreviewTextRu, got %q", article.PreviewTextRu)
+	}
+	if article.PreviewTextEn != "Nutri helps track workouts and supplements with adaptive goals." {
+		t.Fatalf("expected normalized PreviewTextEn, got %q", article.PreviewTextEn)
+	}
+}

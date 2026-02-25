@@ -38,6 +38,8 @@ type Repository interface {
 	GetTagsByRecipeId(ctx context.Context, recipeId int64) ([]Tag, error)
 	SetRecipeTags(ctx context.Context, recipeId int64, tagIds []int64) error
 	CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error)
+	UpdateSystemTag(ctx context.Context, t TagUpdate) (*Tag, error)
+	DeleteSystemTag(ctx context.Context, id int64) error
 
 	// Recipes
 	CreateRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
@@ -351,6 +353,23 @@ func (r *repository) CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, er
 	return &tag, nil
 }
 
+func (r *repository) UpdateSystemTag(ctx context.Context, t TagUpdate) (*Tag, error) {
+	const q = `
+		UPDATE recipe_tags SET
+			name_ru = $1,
+			name_en = $2,
+			updated_at = NOW()
+		WHERE id = $3 AND tag_type = 'system' AND user_id IS NULL AND deleted_at IS NULL
+		RETURNING id, user_id, slug, name_ru, name_en, tag_type, created_at, updated_at`
+
+	var tag Tag
+	err := r.db.GetContext(ctx, &tag, q, t.NameRu, t.NameEn, t.Id)
+	if err != nil {
+		return nil, err
+	}
+	return &tag, nil
+}
+
 func (r *repository) UpdateTag(ctx context.Context, t TagUpdate) (*Tag, error) {
 	const q = `
 		UPDATE recipe_tags SET
@@ -371,6 +390,12 @@ func (r *repository) UpdateTag(ctx context.Context, t TagUpdate) (*Tag, error) {
 func (r *repository) DeleteTag(ctx context.Context, id int64, userId string) error {
 	const q = `UPDATE recipe_tags SET deleted_at = NOW() WHERE id = $1 AND user_id = $2`
 	_, err := r.db.ExecContext(ctx, q, id, userId)
+	return err
+}
+
+func (r *repository) DeleteSystemTag(ctx context.Context, id int64) error {
+	const q = `UPDATE recipe_tags SET deleted_at = NOW() WHERE id = $1 AND tag_type = 'system' AND user_id IS NULL`
+	_, err := r.db.ExecContext(ctx, q, id)
 	return err
 }
 

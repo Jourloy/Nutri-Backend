@@ -100,6 +100,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 
 			r.Post("/admin/categories", c.CreateSystemCategory)
 			r.Post("/admin/tags", c.CreateSystemTag)
+			r.Put("/admin/tags/{id}", c.UpdateSystemTag)
+			r.Delete("/admin/tags/{id}", c.DeleteSystemTag)
 		})
 	})
 
@@ -129,6 +131,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║    PUT /recipe/admin/recipes/{id} (admin: update Nutri recipe)")
 	logger.Info("║ DELETE /recipe/admin/recipes/{id} (admin: delete Nutri recipe)")
 	logger.Info("║   POST /recipe/admin/tags (admin: create system tag)")
+	logger.Info("║    PUT /recipe/admin/tags/{id} (admin: update system tag)")
+	logger.Info("║ DELETE /recipe/admin/tags/{id} (admin: delete system tag)")
 	logger.Info("╚═════")
 }
 
@@ -1039,6 +1043,55 @@ func (c *Controller) CreateSystemTag(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(tag)
+}
+
+func (c *Controller) UpdateSystemTag(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid tag id", http.StatusBadRequest)
+		return
+	}
+
+	var tu TagUpdate
+	if err := json.NewDecoder(r.Body).Decode(&tu); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	tu.Id = id
+
+	if tu.NameRu == "" {
+		http.Error(w, "nameRu is required", http.StatusBadRequest)
+		return
+	}
+
+	tag, err := c.service.UpdateSystemTag(context.Background(), tu)
+	if err != nil {
+		logger.Error("failed to update system tag", "id", id, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tag)
+}
+
+func (c *Controller) DeleteSystemTag(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid tag id", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.service.DeleteSystemTag(context.Background(), id); err != nil {
+		logger.Error("failed to delete system tag", "id", id, "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
 // ===== Upload =====

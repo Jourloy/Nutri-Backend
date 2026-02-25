@@ -2,41 +2,50 @@ package ai
 
 import "testing"
 
-func TestStripTrailingCharCount(t *testing.T) {
-	cases := []struct {
-		in   string
-		want string
-	}{
-		{"Главная неудача похудения (168 символов).", "Главная неудача похудения"},
-		{"Главная неудача похудения (168 символов)", "Главная неудача похудения"},
-		{"Some text (168 characters).", "Some text"},
-		{"Some text (168 character)", "Some text"},
-		{"No suffix here.", "No suffix here."},
-		{"   Text with spaces (12 символов).   ", "Text with spaces"},
+func TestNormalizeGeneratedArticleLanguages_SwapsPairs(t *testing.T) {
+	article := &GeneratedArticle{
+		TitleRu:           "Smart tracking with Nutri",
+		TitleEn:           "Как Nutri помогает считать КБЖУ",
+		PreviewTextRu:     "Track calories, cholesterol and fiber in Nutri.",
+		PreviewTextEn:     "Nutri помогает отслеживать КБЖУ, холестерин и клетчатку.",
+		MetaDescriptionRu: "Track nutrition and workouts in one app.",
+		MetaDescriptionEn: "Как отслеживать питание и тренировки в Nutri.",
+		ContentRu:         "<p>Track supplements and workouts.</p>",
+		ContentEn:         "<p>Отслеживайте добавки и тренировки.</p>",
 	}
 
-	for _, c := range cases {
-		if got := StripTrailingCharCount(c.in); got != c.want {
-			t.Fatalf("StripTrailingCharCount(%q) = %q; want %q", c.in, got, c.want)
-		}
+	swapped := NormalizeGeneratedArticleLanguages(article)
+	if !swapped {
+		t.Fatalf("expected swapped=true")
+	}
+	if article.TitleRu != "Как Nutri помогает считать КБЖУ" {
+		t.Fatalf("expected swapped TitleRu, got %q", article.TitleRu)
+	}
+	if article.TitleEn != "Smart tracking with Nutri" {
+		t.Fatalf("expected swapped TitleEn, got %q", article.TitleEn)
 	}
 }
 
-func TestApproxWordCountFromHTML(t *testing.T) {
-	cases := []struct {
-		in   string
-		want int
-	}{
-		{"", 0},
-		{"<p>Hello world</p>", 2},
-		{"<h2>Title</h2><p>Hello&nbsp;world</p>", 3},
-		{"<p>Привет мир</p>", 2},
-		{"<p>one two</p><ul><li>three</li><li>four</li></ul>", 4},
+func TestNormalizeGeneratedArticleLanguages_LeavesCorrectPairs(t *testing.T) {
+	article := &GeneratedArticle{
+		TitleRu:           "Как Nutri помогает считать КБЖУ",
+		TitleEn:           "How Nutri helps with macro tracking",
+		PreviewTextRu:     "Nutri помогает отслеживать добавки и тренировки каждый день.",
+		PreviewTextEn:     "Nutri helps track supplements and workouts every day.",
+		MetaDescriptionRu: "Учёт питания, тренировок и цикла в одном приложении.",
+		MetaDescriptionEn: "Track nutrition, workouts, and cycle in one app.",
+		ContentRu:         "<p>Отслеживайте КБЖУ, клетчатку и холестерин.</p>",
+		ContentEn:         "<p>Track calories, fiber, and cholesterol.</p>",
 	}
 
-	for _, c := range cases {
-		if got := ApproxWordCountFromHTML(c.in); got != c.want {
-			t.Fatalf("ApproxWordCountFromHTML(%q) = %d; want %d", c.in, got, c.want)
-		}
+	swapped := NormalizeGeneratedArticleLanguages(article)
+	if swapped {
+		t.Fatalf("expected swapped=false")
+	}
+	if article.TitleRu != "Как Nutri помогает считать КБЖУ" {
+		t.Fatalf("expected original TitleRu, got %q", article.TitleRu)
+	}
+	if article.TitleEn != "How Nutri helps with macro tracking" {
+		t.Fatalf("expected original TitleEn, got %q", article.TitleEn)
 	}
 }

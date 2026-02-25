@@ -49,6 +49,8 @@ type Service interface {
 	DeleteTag(ctx context.Context, id int64, userId string) error
 	GetTags(ctx context.Context, userId *string) ([]Tag, error)
 	CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error)
+	UpdateSystemTag(ctx context.Context, t TagUpdate) (*Tag, error)
+	DeleteSystemTag(ctx context.Context, id int64) error
 
 	// Recipes
 	CreateRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
@@ -321,6 +323,14 @@ func (s *service) GetTags(ctx context.Context, userId *string) ([]Tag, error) {
 func (s *service) CreateSystemTag(ctx context.Context, t TagCreate) (*Tag, error) {
 	t.UserId = nil
 	return s.repo.CreateSystemTag(ctx, t)
+}
+
+func (s *service) UpdateSystemTag(ctx context.Context, t TagUpdate) (*Tag, error) {
+	return s.repo.UpdateSystemTag(ctx, t)
+}
+
+func (s *service) DeleteSystemTag(ctx context.Context, id int64) error {
+	return s.repo.DeleteSystemTag(ctx, id)
 }
 
 // ===== Recipes =====
