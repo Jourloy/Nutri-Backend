@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/jourloy/nutri-backend/internal/database"
+	"github.com/lib/pq"
 )
 
 type Repository interface {
@@ -352,7 +353,11 @@ func (r *repository) GetArticles(ctx context.Context, params ArticleListParams, 
 	args := []interface{}{}
 	argIndex := 1
 
-	if !includeAll {
+	if len(params.AllowedStatuses) > 0 {
+		conditions = append(conditions, fmt.Sprintf("a.status = ANY($%d)", argIndex))
+		args = append(args, pq.Array(params.AllowedStatuses))
+		argIndex++
+	} else if !includeAll {
 		conditions = append(conditions, "a.status != 'draft'")
 	}
 

@@ -73,9 +73,24 @@ LANGUAGE RULES (CRITICAL):
 CONTENT RULES:
 - contentRu/contentEn must be HTML fragments (no <html>, no <body>)
 - Allowed tags only: <p>, <h1>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>, <a>
+- In addition to allowed HTML tags, you may include a plain-text image marker as a standalone line in square brackets.
 - Do NOT use tables
 - Do NOT include <style> or <script>
 - Do NOT use inline styles
+
+IMAGE MARKERS:
+- Use this only when an image clearly improves understanding.
+- Format must be exactly: [english gemini image prompt]
+- Text inside square brackets must be English only.
+- Keep image marker as a standalone line. Do not mix it with CTA or other text in the same element.
+
+CTA RULES:
+- Add 1-2 CTA links in contentRu and 1-2 CTA links in contentEn.
+- CTA must be an HTML link with class "nutri-cta-link".
+- CTA link must include target="_blank" and rel="noopener noreferrer".
+- Choose CTA URL contextually based on the article topic and user intent.
+- Place CTA in natural points (after a practical section and/or near the conclusion).
+- Never place CTA links back-to-back.
 
 STRUCTURE:
 - Short intro
@@ -101,6 +116,11 @@ SEO:
 - metaDescriptionRu/metaDescriptionEn: 140-160 characters
 - previewTextRu/previewTextEn: 120-200 characters
 - Do NOT append the length in parentheses (e.g. "(168 символов)") or any other meta text.
+
+EXAMPLES:
+- Image marker example: [close-up photo of a healthy breakfast bowl with oats, berries, and nuts, natural morning light]
+- CTA example RU: <a class="nutri-cta-link" href="https://nutri.jourloy.com/prices?utm_source=blog&utm_medium=cta&utm_campaign=weight-loss-guide" target="_blank" rel="noopener noreferrer">Попробовать Nutri</a>
+- CTA example EN: <a class="nutri-cta-link" href="https://nutri.jourloy.com/prices?utm_source=blog&utm_medium=cta&utm_campaign=meal-planning" target="_blank" rel="noopener noreferrer">Try Nutri</a>
 
 Return ONLY JSON. No markdown fences. No extra text.`
 

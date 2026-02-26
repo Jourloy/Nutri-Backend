@@ -116,12 +116,21 @@ func requireAdmin(next http.Handler) http.Handler {
 
 // ===== Helper Functions =====
 
-func getPlanType(r *http.Request) string {
-	si, ok := subscription.SubscriptionFromContext(r.Context())
-	if !ok {
-		return ""
+func getViewerAccess(r *http.Request) ViewerAccess {
+	access := ViewerAccess{}
+
+	if u, ok := auth.UserFromContext(r.Context()); ok {
+		access.IsAuthenticated = true
+		access.IsAdmin = u.IsAdmin
 	}
-	return si.PlanType
+
+	if si, ok := subscription.SubscriptionFromContext(r.Context()); ok {
+		access.PlanCode = si.PlanCode
+	} else if access.IsAuthenticated {
+		access.PlanCode = "START"
+	}
+
+	return access
 }
 
 func parseListParams(r *http.Request) ArticleListParams {
@@ -165,9 +174,9 @@ func parseListParams(r *http.Request) ArticleListParams {
 
 func (c *Controller) GetPublicArticles(w http.ResponseWriter, r *http.Request) {
 	params := parseListParams(r)
-	planType := getPlanType(r)
+	viewer := getViewerAccess(r)
 
-	response, err := c.service.GetPublicArticles(context.Background(), params, planType)
+	response, err := c.service.GetPublicArticles(context.Background(), params, viewer)
 	if err != nil {
 		logger.Error("failed to get public articles", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -181,9 +190,9 @@ func (c *Controller) GetPublicArticles(w http.ResponseWriter, r *http.Request) {
 
 func (c *Controller) GetPublicArticle(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
-	planType := getPlanType(r)
+	viewer := getViewerAccess(r)
 
-	article, err := c.service.GetPublicArticleBySlug(context.Background(), slug, planType)
+	article, err := c.service.GetPublicArticleBySlug(context.Background(), slug, viewer)
 	if err != nil {
 		if err.Error() == "access denied" {
 			http.Error(w, "access denied", http.StatusForbidden)
@@ -320,8 +329,8 @@ func (c *Controller) CreateArticle(w http.ResponseWriter, r *http.Request) {
 	if articleCreate.Status == "" {
 		articleCreate.Status = "draft"
 	}
-	if articleCreate.Status != "draft" && articleCreate.Status != "authorized" && articleCreate.Status != "paid" && articleCreate.Status != "public" {
-		http.Error(w, "invalid status: must be draft, authorized, paid, or public", http.StatusBadRequest)
+	if articleCreate.Status != "draft" && articleCreate.Status != "preview" && articleCreate.Status != "authorized" && articleCreate.Status != "paid" && articleCreate.Status != "public" {
+		http.Error(w, "invalid status: must be draft, preview, authorized, paid, or public", http.StatusBadRequest)
 		return
 	}
 
@@ -353,8 +362,8 @@ func (c *Controller) UpdateArticle(w http.ResponseWriter, r *http.Request) {
 	articleUpdate.Id = id
 
 	// Validate status
-	if articleUpdate.Status != "" && articleUpdate.Status != "draft" && articleUpdate.Status != "authorized" && articleUpdate.Status != "paid" && articleUpdate.Status != "public" {
-		http.Error(w, "invalid status: must be draft, authorized, paid, or public", http.StatusBadRequest)
+	if articleUpdate.Status != "" && articleUpdate.Status != "draft" && articleUpdate.Status != "preview" && articleUpdate.Status != "authorized" && articleUpdate.Status != "paid" && articleUpdate.Status != "public" {
+		http.Error(w, "invalid status: must be draft, preview, authorized, paid, or public", http.StatusBadRequest)
 		return
 	}
 

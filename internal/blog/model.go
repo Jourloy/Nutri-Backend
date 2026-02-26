@@ -222,13 +222,20 @@ type ArticlePublicListResponse struct {
 	TotalPages int             `json:"totalPages"`
 }
 
+type ViewerAccess struct {
+	IsAdmin         bool
+	IsAuthenticated bool
+	PlanCode        string
+}
+
 type ArticleListParams struct {
-	Page         int
-	PerPage      int
-	CategorySlug *string
-	TagSlug      *string
-	Status       *string
-	Search       *string
+	Page            int
+	PerPage         int
+	CategorySlug    *string
+	TagSlug         *string
+	Status          *string
+	Search          *string
+	AllowedStatuses []string
 }
 
 // ===== Image Upload =====

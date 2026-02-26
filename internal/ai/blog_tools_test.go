@@ -1,6 +1,9 @@
 package ai
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeGeneratedArticleLanguages_SwapsPairs(t *testing.T) {
 	article := &GeneratedArticle{
@@ -47,5 +50,28 @@ func TestNormalizeGeneratedArticleLanguages_LeavesCorrectPairs(t *testing.T) {
 	}
 	if article.TitleEn != "How Nutri helps with macro tracking" {
 		t.Fatalf("expected original TitleEn, got %q", article.TitleEn)
+	}
+}
+
+func TestGenerateArticleSystemPrompt_IncludesImageMarkersAndCtaRules(t *testing.T) {
+	requiredSnippets := []string{
+		"You MUST return ONLY a valid JSON object with EXACTLY these keys:",
+		"LANGUAGE RULES (CRITICAL):",
+		"IMAGE MARKERS:",
+		"[english gemini image prompt]",
+		"Text inside square brackets must be English only.",
+		"CTA RULES:",
+		"Add 1-2 CTA links in contentRu and 1-2 CTA links in contentEn.",
+		`class "nutri-cta-link"`,
+		`target="_blank" and rel="noopener noreferrer"`,
+		"Image marker example:",
+		"CTA example RU:",
+		"CTA example EN:",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(generateArticleSystemPrompt, snippet) {
+			t.Fatalf("expected prompt to contain %q", snippet)
+		}
 	}
 }

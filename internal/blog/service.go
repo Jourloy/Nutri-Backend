@@ -41,8 +41,8 @@ type Service interface {
 	GetAllArticles(ctx context.Context, params ArticleListParams) (*ArticleListResponse, error)
 
 	// Articles (Public) - with access control
-	GetPublicArticles(ctx context.Context, params ArticleListParams, planType string) (*ArticlePublicListResponse, error)
-	GetPublicArticleBySlug(ctx context.Context, slug string, planType string) (*ArticlePublic, error)
+	GetPublicArticles(ctx context.Context, params ArticleListParams, viewer ViewerAccess) (*ArticlePublicListResponse, error)
+	GetPublicArticleBySlug(ctx context.Context, slug string, viewer ViewerAccess) (*ArticlePublic, error)
 	TrackView(ctx context.Context, articleId int64) error
 
 	// Feedback
@@ -162,8 +162,8 @@ func (s *service) CreateArticle(ctx context.Context, a ArticleCreate) (*Article,
 		}
 	}
 
-	// Set published_at if status is not draft
-	if a.Status != "draft" {
+	// Set published_at only for publishable statuses.
+	if isPublishableStatus(a.Status) {
 		if err := s.repo.SetPublishedAt(ctx, article.Id); err != nil {
 			s.logger.Error("failed to set published_at", "articleId", article.Id, "error", err)
 		}
@@ -190,8 +190,8 @@ func (s *service) UpdateArticle(ctx context.Context, a ArticleUpdate) (*Article,
 		s.logger.Error("failed to update article tags", "articleId", article.Id, "error", err)
 	}
 
-	// Set published_at if transitioning from draft to published status
-	if current.Status == "draft" && a.Status != "draft" {
+	// Set published_at only when transitioning into a publishable status.
+	if !isPublishableStatus(current.Status) && isPublishableStatus(a.Status) {
 		if err := s.repo.SetPublishedAt(ctx, article.Id); err != nil {
 			s.logger.Error("failed to set published_at", "articleId", article.Id, "error", err)
 		}
@@ -228,37 +228,37 @@ func (s *service) GetAllArticles(ctx context.Context, params ArticleListParams) 
 
 // ===== Articles (Public) =====
 
-func (s *service) GetPublicArticles(ctx context.Context, params ArticleListParams, planType string) (*ArticlePublicListResponse, error) {
+func (s *service) GetPublicArticles(ctx context.Context, params ArticleListParams, viewer ViewerAccess) (*ArticlePublicListResponse, error) {
+	params.AllowedStatuses = allowedStatusesForViewer(viewer)
+
 	response, err := s.repo.GetArticles(ctx, params, false)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter by access and convert to public
-	publicArticles := []ArticlePublic{}
+	// Convert to public response.
+	publicArticles := make([]ArticlePublic, 0, len(response.Articles))
 	for i := range response.Articles {
-		if CanAccessArticle(response.Articles[i].Status, planType) {
-			s.loadArticleRelationsInPlace(ctx, &response.Articles[i])
-			publicArticles = append(publicArticles, response.Articles[i].ToPublic())
-		}
+		s.loadArticleRelationsInPlace(ctx, &response.Articles[i])
+		publicArticles = append(publicArticles, response.Articles[i].ToPublic())
 	}
 
 	return &ArticlePublicListResponse{
 		Articles:   publicArticles,
-		Total:      len(publicArticles),
+		Total:      response.Total,
 		Page:       response.Page,
 		PerPage:    response.PerPage,
 		TotalPages: response.TotalPages,
 	}, nil
 }
 
-func (s *service) GetPublicArticleBySlug(ctx context.Context, slug string, planType string) (*ArticlePublic, error) {
+func (s *service) GetPublicArticleBySlug(ctx context.Context, slug string, viewer ViewerAccess) (*ArticlePublic, error) {
 	article, err := s.repo.GetArticleBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
 
-	if !CanAccessArticle(article.Status, planType) {
+	if !CanAccessArticle(article.Status, viewer) {
 		return nil, fmt.Errorf("access denied")
 	}
 
@@ -404,17 +404,47 @@ func (s *service) loadArticleRelationsInPlace(ctx context.Context, article *Arti
 	}
 }
 
-// CanAccessArticle checks if a user can access an article based on status and plan type.
-// planType: empty string for anonymous, "START" for free users, "PLUS"/"PRO"/"ELITE" for paid.
-func CanAccessArticle(status, planType string) bool {
+func isPublishableStatus(status string) bool {
+	switch status {
+	case "authorized", "paid", "public":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasPaidPlanCode(planCode string) bool {
+	normalized := strings.TrimSpace(strings.ToUpper(planCode))
+	return normalized != "" && normalized != "START"
+}
+
+func allowedStatusesForViewer(viewer ViewerAccess) []string {
+	if viewer.IsAdmin {
+		return []string{"preview", "authorized", "paid", "public"}
+	}
+
+	allowed := []string{"public"}
+	if viewer.IsAuthenticated {
+		allowed = append(allowed, "authorized")
+		if hasPaidPlanCode(viewer.PlanCode) {
+			allowed = append(allowed, "paid")
+		}
+	}
+
+	return allowed
+}
+
+// CanAccessArticle checks if a user can access an article based on status and viewer access context.
+func CanAccessArticle(status string, viewer ViewerAccess) bool {
 	switch status {
 	case "public":
 		return true
+	case "preview":
+		return viewer.IsAdmin
 	case "authorized":
-		return planType != "" // Any logged-in user
+		return viewer.IsAuthenticated || viewer.IsAdmin
 	case "paid":
-		// Paid plans: not START
-		return planType != "" && planType != "START"
+		return viewer.IsAdmin || (viewer.IsAuthenticated && hasPaidPlanCode(viewer.PlanCode))
 	case "draft":
 		return false
 	default:
