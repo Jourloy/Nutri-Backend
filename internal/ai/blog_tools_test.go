@@ -58,6 +58,8 @@ func TestGenerateArticleSystemPrompt_IncludesImageMarkersAndCtaRules(t *testing.
 		"You MUST return ONLY a valid JSON object with EXACTLY these keys:",
 		"LANGUAGE RULES (CRITICAL):",
 		"IMAGE MARKERS:",
+		"Do NOT include numeric citations/references in text",
+		"Include at least 1 image marker in contentRu and at least 1 image marker in contentEn.",
 		"[english gemini image prompt]",
 		"Text inside square brackets must be English only.",
 		"CTA RULES:",
@@ -73,5 +75,52 @@ func TestGenerateArticleSystemPrompt_IncludesImageMarkersAndCtaRules(t *testing.
 		if !strings.Contains(generateArticleSystemPrompt, snippet) {
 			t.Fatalf("expected prompt to contain %q", snippet)
 		}
+	}
+}
+
+func TestStripInlineNumericCitations_PreservesGeminiImageMarker(t *testing.T) {
+	input := `<p>Protein is important [1] for recovery [2, 3].</p>
+[close-up photo of high-protein meal prep containers on a kitchen table, natural light]`
+
+	cleaned := StripInlineNumericCitations(input)
+	if strings.Contains(cleaned, "[1]") || strings.Contains(cleaned, "[2, 3]") {
+		t.Fatalf("expected numeric citations to be removed, got %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "[close-up photo of high-protein meal prep containers on a kitchen table, natural light]") {
+		t.Fatalf("expected gemini marker to be preserved, got %q", cleaned)
+	}
+}
+
+func TestEnsureAtLeastOneImageMarker_AppendsFallbackWhenMissing(t *testing.T) {
+	input := "<p>Detailed article content without marker.</p>"
+	out := EnsureAtLeastOneImageMarker(input, "")
+
+	if !HasGeminiImageMarker(out) {
+		t.Fatalf("expected output to contain an image marker, got %q", out)
+	}
+	if strings.Contains(out, "[1]") {
+		t.Fatalf("unexpected numeric citation marker in output: %q", out)
+	}
+}
+
+func TestNormalizeSourceURLs_ValidatesAndDeduplicates(t *testing.T) {
+	in := []string{
+		" https://Example.com/path ",
+		"https://example.com/path",
+		"http://example.com/another",
+		"ftp://example.com/not-allowed",
+		"example.com/no-scheme",
+		"",
+	}
+
+	out := NormalizeSourceURLs(in)
+	if len(out) != 2 {
+		t.Fatalf("expected 2 normalized urls, got %#v", out)
+	}
+	if out[0] != "https://example.com/path" {
+		t.Fatalf("unexpected first url: %q", out[0])
+	}
+	if out[1] != "http://example.com/another" {
+		t.Fatalf("unexpected second url: %q", out[1])
 	}
 }

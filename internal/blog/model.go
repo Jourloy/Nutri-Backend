@@ -1,6 +1,10 @@
 package blog
 
-import "time"
+import (
+	"time"
+
+	"github.com/lib/pq"
+)
 
 // ===== Category =====
 
@@ -64,28 +68,29 @@ type TagUpdate struct {
 // ===== Article =====
 
 type Article struct {
-	Id                 int64      `json:"id" db:"id"`
-	Slug               string     `json:"slug" db:"slug"`
-	TitleRu            string     `json:"titleRu" db:"title_ru"`
-	TitleEn            string     `json:"titleEn" db:"title_en"`
-	ContentRu          string     `json:"contentRu" db:"content_ru"`
-	ContentEn          string     `json:"contentEn" db:"content_en"`
-	PreviewTextRu      *string    `json:"previewTextRu,omitempty" db:"preview_text_ru"`
-	PreviewTextEn      *string    `json:"previewTextEn,omitempty" db:"preview_text_en"`
-	PreviewImageUrl    *string    `json:"previewImageUrl,omitempty" db:"preview_image_url"`
-	CategoryId         *int64     `json:"categoryId,omitempty" db:"category_id"`
-	MetaDescriptionRu  *string    `json:"metaDescriptionRu,omitempty" db:"meta_description_ru"`
-	MetaDescriptionEn  *string    `json:"metaDescriptionEn,omitempty" db:"meta_description_en"`
-	OgImageUrl         *string    `json:"ogImageUrl,omitempty" db:"og_image_url"`
-	CanonicalUrl       *string    `json:"canonicalUrl,omitempty" db:"canonical_url"`
-	Status             string     `json:"status" db:"status"`
-	ViewCount          int        `json:"viewCount" db:"view_count"`
-	ReadingTimeMinutes int        `json:"readingTimeMinutes" db:"reading_time_minutes"`
-	PublishedAt        *time.Time `json:"publishedAt,omitempty" db:"published_at"`
-	AuthorId           *string    `json:"authorId,omitempty" db:"author_id"`
-	CreatedAt          time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt          time.Time  `json:"updatedAt" db:"updated_at"`
-	DeletedAt          *time.Time `json:"-" db:"deleted_at"`
+	Id                 int64          `json:"id" db:"id"`
+	Slug               string         `json:"slug" db:"slug"`
+	TitleRu            string         `json:"titleRu" db:"title_ru"`
+	TitleEn            string         `json:"titleEn" db:"title_en"`
+	ContentRu          string         `json:"contentRu" db:"content_ru"`
+	ContentEn          string         `json:"contentEn" db:"content_en"`
+	PreviewTextRu      *string        `json:"previewTextRu,omitempty" db:"preview_text_ru"`
+	PreviewTextEn      *string        `json:"previewTextEn,omitempty" db:"preview_text_en"`
+	PreviewImageUrl    *string        `json:"previewImageUrl,omitempty" db:"preview_image_url"`
+	CategoryId         *int64         `json:"categoryId,omitempty" db:"category_id"`
+	MetaDescriptionRu  *string        `json:"metaDescriptionRu,omitempty" db:"meta_description_ru"`
+	MetaDescriptionEn  *string        `json:"metaDescriptionEn,omitempty" db:"meta_description_en"`
+	OgImageUrl         *string        `json:"ogImageUrl,omitempty" db:"og_image_url"`
+	CanonicalUrl       *string        `json:"canonicalUrl,omitempty" db:"canonical_url"`
+	Sources            pq.StringArray `json:"sources,omitempty" db:"sources"`
+	Status             string         `json:"status" db:"status"`
+	ViewCount          int            `json:"viewCount" db:"view_count"`
+	ReadingTimeMinutes int            `json:"readingTimeMinutes" db:"reading_time_minutes"`
+	PublishedAt        *time.Time     `json:"publishedAt,omitempty" db:"published_at"`
+	AuthorId           *string        `json:"authorId,omitempty" db:"author_id"`
+	CreatedAt          time.Time      `json:"createdAt" db:"created_at"`
+	UpdatedAt          time.Time      `json:"updatedAt" db:"updated_at"`
+	DeletedAt          *time.Time     `json:"-" db:"deleted_at"`
 
 	// Joined fields (not in DB directly)
 	Category *Category `json:"category,omitempty" db:"-"`
@@ -142,41 +147,43 @@ func (a *Article) ToPublic() ArticlePublic {
 }
 
 type ArticleCreate struct {
-	Slug              string  `json:"slug"`
-	TitleRu           string  `json:"titleRu"`
-	TitleEn           string  `json:"titleEn"`
-	ContentRu         string  `json:"contentRu"`
-	ContentEn         string  `json:"contentEn"`
-	PreviewTextRu     *string `json:"previewTextRu,omitempty"`
-	PreviewTextEn     *string `json:"previewTextEn,omitempty"`
-	PreviewImageUrl   *string `json:"previewImageUrl,omitempty"`
-	CategoryId        *int64  `json:"categoryId,omitempty"`
-	MetaDescriptionRu *string `json:"metaDescriptionRu,omitempty"`
-	MetaDescriptionEn *string `json:"metaDescriptionEn,omitempty"`
-	OgImageUrl        *string `json:"ogImageUrl,omitempty"`
-	CanonicalUrl      *string `json:"canonicalUrl,omitempty"`
-	Status            string  `json:"status"`
-	AuthorId          *string `json:"-"`
-	TagIds            []int64 `json:"tagIds,omitempty"`
+	Slug              string   `json:"slug"`
+	TitleRu           string   `json:"titleRu"`
+	TitleEn           string   `json:"titleEn"`
+	ContentRu         string   `json:"contentRu"`
+	ContentEn         string   `json:"contentEn"`
+	PreviewTextRu     *string  `json:"previewTextRu,omitempty"`
+	PreviewTextEn     *string  `json:"previewTextEn,omitempty"`
+	PreviewImageUrl   *string  `json:"previewImageUrl,omitempty"`
+	CategoryId        *int64   `json:"categoryId,omitempty"`
+	MetaDescriptionRu *string  `json:"metaDescriptionRu,omitempty"`
+	MetaDescriptionEn *string  `json:"metaDescriptionEn,omitempty"`
+	OgImageUrl        *string  `json:"ogImageUrl,omitempty"`
+	CanonicalUrl      *string  `json:"canonicalUrl,omitempty"`
+	Sources           []string `json:"sources,omitempty"`
+	Status            string   `json:"status"`
+	AuthorId          *string  `json:"-"`
+	TagIds            []int64  `json:"tagIds,omitempty"`
 }
 
 type ArticleUpdate struct {
-	Id                int64   `json:"id"`
-	Slug              string  `json:"slug"`
-	TitleRu           string  `json:"titleRu"`
-	TitleEn           string  `json:"titleEn"`
-	ContentRu         string  `json:"contentRu"`
-	ContentEn         string  `json:"contentEn"`
-	PreviewTextRu     *string `json:"previewTextRu,omitempty"`
-	PreviewTextEn     *string `json:"previewTextEn,omitempty"`
-	PreviewImageUrl   *string `json:"previewImageUrl,omitempty"`
-	CategoryId        *int64  `json:"categoryId,omitempty"`
-	MetaDescriptionRu *string `json:"metaDescriptionRu,omitempty"`
-	MetaDescriptionEn *string `json:"metaDescriptionEn,omitempty"`
-	OgImageUrl        *string `json:"ogImageUrl,omitempty"`
-	CanonicalUrl      *string `json:"canonicalUrl,omitempty"`
-	Status            string  `json:"status"`
-	TagIds            []int64 `json:"tagIds,omitempty"`
+	Id                int64    `json:"id"`
+	Slug              string   `json:"slug"`
+	TitleRu           string   `json:"titleRu"`
+	TitleEn           string   `json:"titleEn"`
+	ContentRu         string   `json:"contentRu"`
+	ContentEn         string   `json:"contentEn"`
+	PreviewTextRu     *string  `json:"previewTextRu,omitempty"`
+	PreviewTextEn     *string  `json:"previewTextEn,omitempty"`
+	PreviewImageUrl   *string  `json:"previewImageUrl,omitempty"`
+	CategoryId        *int64   `json:"categoryId,omitempty"`
+	MetaDescriptionRu *string  `json:"metaDescriptionRu,omitempty"`
+	MetaDescriptionEn *string  `json:"metaDescriptionEn,omitempty"`
+	OgImageUrl        *string  `json:"ogImageUrl,omitempty"`
+	CanonicalUrl      *string  `json:"canonicalUrl,omitempty"`
+	Sources           []string `json:"sources,omitempty"`
+	Status            string   `json:"status"`
+	TagIds            []int64  `json:"tagIds,omitempty"`
 }
 
 // ===== Feedback =====

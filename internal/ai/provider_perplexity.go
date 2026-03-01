@@ -607,6 +607,10 @@ func (p *PerplexityProvider) GenerateArticle(ctx context.Context, req GenerateAr
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Citations     []string `json:"citations"`
+		SearchResults []struct {
+			URL string `json:"url"`
+		} `json:"search_results"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
@@ -631,6 +635,19 @@ func (p *PerplexityProvider) GenerateArticle(ctx context.Context, req GenerateAr
 	if article.TitleRu == "" || article.TitleEn == "" || article.ContentRu == "" || article.ContentEn == "" {
 		return nil, fmt.Errorf("incomplete article generated")
 	}
+
+	sources := NormalizeSourceURLs(apiResp.Citations)
+	if len(sources) == 0 && len(apiResp.SearchResults) > 0 {
+		fallbackSources := make([]string, 0, len(apiResp.SearchResults))
+		for _, result := range apiResp.SearchResults {
+			if strings.TrimSpace(result.URL) == "" {
+				continue
+			}
+			fallbackSources = append(fallbackSources, result.URL)
+		}
+		sources = NormalizeSourceURLs(fallbackSources)
+	}
+	article.Sources = sources
 
 	return &article, nil
 }

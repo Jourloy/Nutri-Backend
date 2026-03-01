@@ -150,6 +150,8 @@ func (s *service) GetAllTags(ctx context.Context) ([]Tag, error) {
 // ===== Articles (Admin) =====
 
 func (s *service) CreateArticle(ctx context.Context, a ArticleCreate) (*Article, error) {
+	a.Sources = normalizeSourceURLs(a.Sources)
+
 	article, err := s.repo.CreateArticle(ctx, a)
 	if err != nil {
 		return nil, err
@@ -179,6 +181,8 @@ func (s *service) UpdateArticle(ctx context.Context, a ArticleUpdate) (*Article,
 	if err != nil {
 		return nil, err
 	}
+
+	a.Sources = normalizeSourceURLs(a.Sources)
 
 	article, err := s.repo.UpdateArticle(ctx, a)
 	if err != nil {
@@ -380,6 +384,51 @@ func (s *service) UploadImage(ctx context.Context, imageData []byte, filename st
 }
 
 // ===== Helpers =====
+
+func normalizeSourceURLs(sources []string) []string {
+	if len(sources) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(sources))
+	seen := make(map[string]struct{}, len(sources))
+
+	for _, raw := range sources {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+
+		parsed, err := url.Parse(raw)
+		if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+			continue
+		}
+
+		scheme := strings.ToLower(parsed.Scheme)
+		if scheme != "http" && scheme != "https" {
+			continue
+		}
+		parsed.Scheme = scheme
+		parsed.Host = strings.ToLower(parsed.Host)
+
+		cleaned := strings.TrimSpace(parsed.String())
+		if cleaned == "" {
+			continue
+		}
+
+		key := strings.ToLower(cleaned)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, cleaned)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
 
 func (s *service) loadArticleWithRelations(ctx context.Context, article *Article) (*Article, error) {
 	s.loadArticleRelationsInPlace(ctx, article)

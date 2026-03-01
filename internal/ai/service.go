@@ -509,6 +509,11 @@ func (s *service) GenerateArticle(ctx context.Context, userId string, topic stri
 	article.PreviewTextEn = StripTrailingCharCount(article.PreviewTextEn)
 	article.MetaDescriptionRu = StripTrailingCharCount(article.MetaDescriptionRu)
 	article.MetaDescriptionEn = StripTrailingCharCount(article.MetaDescriptionEn)
+	article.ContentRu = StripInlineNumericCitations(article.ContentRu)
+	article.ContentEn = StripInlineNumericCitations(article.ContentEn)
+	article.ContentRu = EnsureAtLeastOneImageMarker(article.ContentRu, "")
+	article.ContentEn = EnsureAtLeastOneImageMarker(article.ContentEn, "")
+	article.Sources = NormalizeSourceURLs(article.Sources)
 	if NormalizeGeneratedArticleLanguages(article) && s.logger != nil {
 		s.logger.Warn(
 			"GenerateArticle detected swapped RU/EN fields and normalized response",

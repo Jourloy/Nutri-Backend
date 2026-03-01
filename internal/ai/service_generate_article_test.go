@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -57,8 +58,9 @@ func TestGenerateArticle_SelectsProvider_AndSanitizesSuffixes(t *testing.T) {
 			PreviewTextEn:     "Preview (168 characters).",
 			MetaDescriptionRu: "SEO (168 символов).",
 			MetaDescriptionEn: "SEO (168 characters).",
-			ContentRu:         "<p>RU content</p>",
-			ContentEn:         "<p>EN content</p>",
+			ContentRu:         "<p>RU content [1]</p>",
+			ContentEn:         "<p>EN content [2,3]</p>",
+			Sources:           []string{" https://example.com/a ", "not-a-url"},
 		},
 	}
 	fallback := &fakeAIProviderForGenerateArticle{
@@ -71,6 +73,7 @@ func TestGenerateArticle_SelectsProvider_AndSanitizesSuffixes(t *testing.T) {
 			MetaDescriptionEn: "SEO (168 characters).",
 			ContentRu:         "<p>RU content</p>",
 			ContentEn:         "<p>EN content</p>",
+			Sources:           []string{"https://example.com/fallback"},
 		},
 	}
 
@@ -98,6 +101,15 @@ func TestGenerateArticle_SelectsProvider_AndSanitizesSuffixes(t *testing.T) {
 	if StripTrailingCharCount("Превью (168 символов).") != a1.PreviewTextRu {
 		t.Fatalf("expected PreviewTextRu to be sanitized; got %q", a1.PreviewTextRu)
 	}
+	if len(a1.Sources) != 1 || a1.Sources[0] != "https://example.com/a" {
+		t.Fatalf("expected normalized sources, got %#v", a1.Sources)
+	}
+	if !HasGeminiImageMarker(a1.ContentRu) || !HasGeminiImageMarker(a1.ContentEn) {
+		t.Fatalf("expected fallback image markers in both languages")
+	}
+	if a1.ContentRu == "" || a1.ContentEn == "" {
+		t.Fatalf("expected non-empty content after sanitation")
+	}
 
 	// Explicit provider selects fallback.
 	a2, err := s.GenerateArticle(context.Background(), "admin", "topic", "desc", "perplexity")
@@ -112,6 +124,9 @@ func TestGenerateArticle_SelectsProvider_AndSanitizesSuffixes(t *testing.T) {
 	}
 	if a2.TitleRu != "RU title 2" {
 		t.Fatalf("expected fallback result, got %q", a2.TitleRu)
+	}
+	if len(a2.Sources) != 1 || a2.Sources[0] != "https://example.com/fallback" {
+		t.Fatalf("expected fallback sources, got %#v", a2.Sources)
 	}
 
 	// Auto selects primary.
@@ -159,5 +174,40 @@ func TestGenerateArticle_NormalizesSwappedLanguages(t *testing.T) {
 	}
 	if article.PreviewTextEn != "Nutri helps track workouts and supplements with adaptive goals." {
 		t.Fatalf("expected normalized PreviewTextEn, got %q", article.PreviewTextEn)
+	}
+}
+
+func TestGenerateArticle_RemovesNumericCitationsAndKeepsGeminiMarkers(t *testing.T) {
+	provider := &fakeAIProviderForGenerateArticle{
+		out: &GeneratedArticle{
+			TitleRu:           "RU title",
+			TitleEn:           "EN title",
+			PreviewTextRu:     "RU preview",
+			PreviewTextEn:     "EN preview",
+			MetaDescriptionRu: "RU meta",
+			MetaDescriptionEn: "EN meta",
+			ContentRu:         "<p>Текст [1] про питание.</p>\n[close-up photo of healthy breakfast ingredients on wooden table]",
+			ContentEn:         "<p>Text [2, 4] about nutrition.</p>\n[close-up photo of macro-friendly meal prep containers, natural light]",
+		},
+	}
+
+	s := &service{
+		aiProvider:     provider,
+		aiProviderName: "openai",
+	}
+
+	article, err := s.GenerateArticle(context.Background(), "admin", "topic", "desc", "openai")
+	if err != nil {
+		t.Fatalf("GenerateArticle returned error: %v", err)
+	}
+
+	if strings.Contains(article.ContentRu, "[1]") || strings.Contains(article.ContentEn, "[2, 4]") {
+		t.Fatalf("expected numeric citations to be removed, got ru=%q en=%q", article.ContentRu, article.ContentEn)
+	}
+	if !strings.Contains(article.ContentRu, "[close-up photo of healthy breakfast ingredients on wooden table]") {
+		t.Fatalf("expected ru image marker to stay intact, got %q", article.ContentRu)
+	}
+	if !strings.Contains(article.ContentEn, "[close-up photo of macro-friendly meal prep containers, natural light]") {
+		t.Fatalf("expected en image marker to stay intact, got %q", article.ContentEn)
 	}
 }

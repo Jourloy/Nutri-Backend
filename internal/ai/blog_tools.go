@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -74,12 +75,14 @@ CONTENT RULES:
 - contentRu/contentEn must be HTML fragments (no <html>, no <body>)
 - Allowed tags only: <p>, <h1>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>, <a>
 - In addition to allowed HTML tags, you may include a plain-text image marker as a standalone line in square brackets.
+- Do NOT include numeric citations/references in text: forbidden patterns include [1], [2], [1,2], [2-4].
 - Do NOT use tables
 - Do NOT include <style> or <script>
 - Do NOT use inline styles
 
 IMAGE MARKERS:
 - Use this only when an image clearly improves understanding.
+- Include at least 1 image marker in contentRu and at least 1 image marker in contentEn.
 - Format must be exactly: [english gemini image prompt]
 - Text inside square brackets must be English only.
 - Keep image marker as a standalone line. Do not mix it with CTA or other text in the same element.
@@ -110,6 +113,7 @@ LENGTH:
 - Minimum 900 words per language
 - Aim 1200-2000 words per language
 - Write in-depth: expand each section to 2-4 short paragraphs, add concrete examples, step-by-step guidance, and practical checklists where appropriate.
+- Keep sections substantial and specific; avoid short generic paragraphs.
 - Do NOT include character/word counts anywhere. No suffixes like "(168 символов)" or "(168 characters)".
 
 SEO:
@@ -125,9 +129,14 @@ EXAMPLES:
 Return ONLY JSON. No markdown fences. No extra text.`
 
 var (
-	reHTMLTags            = regexp.MustCompile(`(?s)<[^>]*>`)
-	reTrailingCharCountEn = regexp.MustCompile(`(?i)\s*\(\s*\d+\s*characters?\s*\)\s*\.?\s*$`)
-	reTrailingCharCountRu = regexp.MustCompile(`(?i)\s*\(\s*\d+\s*символ(?:ов|а)?\s*\)\s*\.?\s*$`)
+	reHTMLTags              = regexp.MustCompile(`(?s)<[^>]*>`)
+	reTrailingCharCountEn   = regexp.MustCompile(`(?i)\s*\(\s*\d+\s*characters?\s*\)\s*\.?\s*$`)
+	reTrailingCharCountRu   = regexp.MustCompile(`(?i)\s*\(\s*\d+\s*символ(?:ов|а)?\s*\)\s*\.?\s*$`)
+	reInlineNumericCitation = regexp.MustCompile(`\[(?:\s*\d+\s*(?:[-–]\s*\d+\s*)?(?:,\s*\d+\s*(?:[-–]\s*\d+\s*)?)*)\]`)
+	reAnySquareMarker       = regexp.MustCompile(`\[[^\[\]\r\n]{3,500}\]`)
+	reLatinLetters          = regexp.MustCompile(`[A-Za-z]`)
+	reMultiSpaces           = regexp.MustCompile(`[ \t]{2,}`)
+	reSpaceBeforePunct      = regexp.MustCompile(`\s+([,.;:!?])`)
 )
 
 // StripMarkdownCodeFences extracts content from the first fenced code block if present.
@@ -185,6 +194,101 @@ func ApproxWordCountFromHTML(html string) int {
 		return 0
 	}
 	return len(strings.Fields(plain))
+}
+
+// StripInlineNumericCitations removes numeric references like [1], [2], [1,2], [3-4].
+// It preserves non-numeric square-bracket markers such as Gemini image prompts.
+func StripInlineNumericCitations(content string) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+
+	cleaned := reInlineNumericCitation.ReplaceAllString(content, "")
+	cleaned = reSpaceBeforePunct.ReplaceAllString(cleaned, "$1")
+	cleaned = reMultiSpaces.ReplaceAllString(cleaned, " ")
+	cleaned = strings.ReplaceAll(cleaned, " \n", "\n")
+	cleaned = strings.ReplaceAll(cleaned, "\n ", "\n")
+	return strings.TrimSpace(cleaned)
+}
+
+// HasGeminiImageMarker returns true when content contains at least one non-numeric
+// square-bracket marker with Latin letters (expected for English Gemini prompts).
+func HasGeminiImageMarker(content string) bool {
+	for _, marker := range reAnySquareMarker.FindAllString(content, -1) {
+		if reInlineNumericCitation.MatchString(marker) {
+			continue
+		}
+		if reLatinLetters.MatchString(marker) {
+			return true
+		}
+	}
+	return false
+}
+
+const DefaultFallbackImageMarkerPrompt = "editorial photo of healthy meal planning setup with fresh ingredients, natural light, realistic details"
+
+// EnsureAtLeastOneImageMarker appends a fallback marker when none is present.
+func EnsureAtLeastOneImageMarker(content string, fallbackPrompt string) string {
+	content = strings.TrimSpace(content)
+	if HasGeminiImageMarker(content) {
+		return content
+	}
+
+	prompt := strings.TrimSpace(fallbackPrompt)
+	if prompt == "" {
+		prompt = DefaultFallbackImageMarkerPrompt
+	}
+	marker := "[" + prompt + "]"
+	if content == "" {
+		return marker
+	}
+	return strings.TrimSpace(content + "\n\n" + marker)
+}
+
+// NormalizeSourceURLs keeps only valid absolute http/https URLs and deduplicates them.
+func NormalizeSourceURLs(sources []string) []string {
+	if len(sources) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(sources))
+	seen := make(map[string]struct{}, len(sources))
+
+	for _, raw := range sources {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+
+		parsed, err := url.Parse(raw)
+		if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+			continue
+		}
+
+		scheme := strings.ToLower(parsed.Scheme)
+		if scheme != "http" && scheme != "https" {
+			continue
+		}
+		parsed.Scheme = scheme
+		parsed.Host = strings.ToLower(parsed.Host)
+
+		cleaned := strings.TrimSpace(parsed.String())
+		if cleaned == "" {
+			continue
+		}
+
+		key := strings.ToLower(cleaned)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, cleaned)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 func normalizeLanguageSample(s string) string {
@@ -281,12 +385,13 @@ type GenerateArticleRequest struct {
 }
 
 type GeneratedArticle struct {
-	TitleRu           string `json:"titleRu"`
-	TitleEn           string `json:"titleEn"`
-	PreviewTextRu     string `json:"previewTextRu"`
-	PreviewTextEn     string `json:"previewTextEn"`
-	MetaDescriptionRu string `json:"metaDescriptionRu"`
-	MetaDescriptionEn string `json:"metaDescriptionEn"`
-	ContentRu         string `json:"contentRu"`
-	ContentEn         string `json:"contentEn"`
+	TitleRu           string   `json:"titleRu"`
+	TitleEn           string   `json:"titleEn"`
+	PreviewTextRu     string   `json:"previewTextRu"`
+	PreviewTextEn     string   `json:"previewTextEn"`
+	MetaDescriptionRu string   `json:"metaDescriptionRu"`
+	MetaDescriptionEn string   `json:"metaDescriptionEn"`
+	ContentRu         string   `json:"contentRu"`
+	ContentEn         string   `json:"contentEn"`
+	Sources           []string `json:"sources,omitempty"`
 }

@@ -243,14 +243,14 @@ func (r *repository) CreateArticle(ctx context.Context, a ArticleCreate) (*Artic
 			slug, title_ru, title_en, content_ru, content_en,
 			preview_text_ru, preview_text_en, preview_image_url,
 			category_id, meta_description_ru, meta_description_en,
-			og_image_url, canonical_url, status, author_id, reading_time_minutes
+			og_image_url, canonical_url, sources, status, author_id, reading_time_minutes
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 		)
 		RETURNING id, slug, title_ru, title_en, content_ru, content_en,
 		          preview_text_ru, preview_text_en, preview_image_url,
 		          category_id, meta_description_ru, meta_description_en,
-		          og_image_url, canonical_url, status, view_count, reading_time_minutes,
+		          og_image_url, canonical_url, sources, status, view_count, reading_time_minutes,
 		          published_at, author_id, created_at, updated_at`
 
 	readingTime := CalculateReadingTime(a.ContentRu, a.ContentEn)
@@ -260,7 +260,7 @@ func (r *repository) CreateArticle(ctx context.Context, a ArticleCreate) (*Artic
 		a.Slug, a.TitleRu, a.TitleEn, a.ContentRu, a.ContentEn,
 		a.PreviewTextRu, a.PreviewTextEn, a.PreviewImageUrl,
 		a.CategoryId, a.MetaDescriptionRu, a.MetaDescriptionEn,
-		a.OgImageUrl, a.CanonicalUrl, a.Status, a.AuthorId, readingTime)
+		a.OgImageUrl, a.CanonicalUrl, pq.Array(a.Sources), a.Status, a.AuthorId, readingTime)
 	if err != nil {
 		return nil, err
 	}
@@ -283,14 +283,15 @@ func (r *repository) UpdateArticle(ctx context.Context, a ArticleUpdate) (*Artic
 			meta_description_en = $11,
 			og_image_url = $12,
 			canonical_url = $13,
-			status = $14,
-			reading_time_minutes = $15,
+			sources = $14,
+			status = $15,
+			reading_time_minutes = $16,
 			updated_at = NOW()
-		WHERE id = $16 AND deleted_at IS NULL
+		WHERE id = $17 AND deleted_at IS NULL
 		RETURNING id, slug, title_ru, title_en, content_ru, content_en,
 		          preview_text_ru, preview_text_en, preview_image_url,
 		          category_id, meta_description_ru, meta_description_en,
-		          og_image_url, canonical_url, status, view_count, reading_time_minutes,
+		          og_image_url, canonical_url, sources, status, view_count, reading_time_minutes,
 		          published_at, author_id, created_at, updated_at`
 
 	readingTime := CalculateReadingTime(a.ContentRu, a.ContentEn)
@@ -300,7 +301,7 @@ func (r *repository) UpdateArticle(ctx context.Context, a ArticleUpdate) (*Artic
 		a.Slug, a.TitleRu, a.TitleEn, a.ContentRu, a.ContentEn,
 		a.PreviewTextRu, a.PreviewTextEn, a.PreviewImageUrl,
 		a.CategoryId, a.MetaDescriptionRu, a.MetaDescriptionEn,
-		a.OgImageUrl, a.CanonicalUrl, a.Status, readingTime, a.Id)
+		a.OgImageUrl, a.CanonicalUrl, pq.Array(a.Sources), a.Status, readingTime, a.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +319,7 @@ func (r *repository) GetArticleById(ctx context.Context, id int64) (*Article, er
 		SELECT id, slug, title_ru, title_en, content_ru, content_en,
 		       preview_text_ru, preview_text_en, preview_image_url,
 		       category_id, meta_description_ru, meta_description_en,
-		       og_image_url, canonical_url, status, view_count, reading_time_minutes,
+		       og_image_url, canonical_url, sources, status, view_count, reading_time_minutes,
 		       published_at, author_id, created_at, updated_at
 		FROM blog_articles
 		WHERE id = $1 AND deleted_at IS NULL`
@@ -335,7 +336,7 @@ func (r *repository) GetArticleBySlug(ctx context.Context, slug string) (*Articl
 		SELECT id, slug, title_ru, title_en, content_ru, content_en,
 		       preview_text_ru, preview_text_en, preview_image_url,
 		       category_id, meta_description_ru, meta_description_en,
-		       og_image_url, canonical_url, status, view_count, reading_time_minutes,
+		       og_image_url, canonical_url, sources, status, view_count, reading_time_minutes,
 		       published_at, author_id, created_at, updated_at
 		FROM blog_articles
 		WHERE slug = $1 AND deleted_at IS NULL`
@@ -426,7 +427,7 @@ func (r *repository) GetArticles(ctx context.Context, params ArticleListParams, 
 		SELECT a.id, a.slug, a.title_ru, a.title_en, a.content_ru, a.content_en,
 		       a.preview_text_ru, a.preview_text_en, a.preview_image_url,
 		       a.category_id, a.meta_description_ru, a.meta_description_en,
-		       a.og_image_url, a.canonical_url, a.status, a.view_count, a.reading_time_minutes,
+		       a.og_image_url, a.canonical_url, a.sources, a.status, a.view_count, a.reading_time_minutes,
 		       a.published_at, a.author_id, a.created_at, a.updated_at
 		FROM blog_articles a
 		LEFT JOIN blog_categories c ON c.id = a.category_id

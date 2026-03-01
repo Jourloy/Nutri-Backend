@@ -333,7 +333,16 @@ func (p *OpenAIProvider) ImproveText(ctx context.Context, html string) (string, 
 }
 
 func (p *OpenAIProvider) GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error) {
-	userMessage := fmt.Sprintf("Topic: %s\nDescription: %s", req.Topic, req.Description)
+	userMessage := fmt.Sprintf(`Topic: %s
+Description: %s
+
+Execution requirements:
+- Produce an in-depth long-form article for BOTH languages (RU and EN).
+- Target 1200-2000 words per language, with a hard minimum of 900 words per language.
+- Expand each section with practical details, examples, and actionable checklists.
+- Include at least one Gemini image marker in each language: [english gemini image prompt].
+- Do not include numeric citation markers in text like [1], [2], [1,2], [2-4].
+- Return only the JSON object required by the system prompt.`, req.Topic, req.Description)
 
 	resp, err := p.client.CreateChatCompletion(
 		ctx,
@@ -349,7 +358,7 @@ func (p *OpenAIProvider) GenerateArticle(ctx context.Context, req GenerateArticl
 					Content: userMessage,
 				},
 			},
-			MaxTokens:   8000,
+			MaxTokens:   12000,
 			Temperature: 0.4,
 		},
 	)

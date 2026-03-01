@@ -58,6 +58,7 @@ func (f fakeService) GenerateArticle(ctx context.Context, userId string, topic s
 		MetaDescriptionEn: "EN meta",
 		ContentRu:         "<p>RU</p>",
 		ContentEn:         "<p>EN</p>",
+		Sources:           []string{"https://example.com/source"},
 	}, nil
 }
 
@@ -214,6 +215,9 @@ func TestGenerateArticle_SuccessForAdmin(t *testing.T) {
 	}
 	if out.TitleRu == "" || out.TitleEn == "" || out.ContentRu == "" || out.ContentEn == "" {
 		t.Fatalf("expected filled article fields")
+	}
+	if len(out.Sources) != 1 || out.Sources[0] != "https://example.com/source" {
+		t.Fatalf("expected sources in response, got %#v", out.Sources)
 	}
 }
 
