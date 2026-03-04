@@ -237,6 +237,7 @@ func (s *service) PrepareArticle(ctx context.Context, req PrepareArticleRequest)
 	titleRu := strings.TrimSpace(req.TitleRu)
 	descriptionRu := strings.TrimSpace(req.DescriptionRu)
 	contentMarkdownRu := strings.TrimSpace(req.ContentMarkdown)
+	contentMarkdownRu = unwrapOuterMarkdownFence(contentMarkdownRu)
 
 	if titleRu == "" {
 		return nil, fmt.Errorf("titleRu is required")
@@ -585,6 +586,45 @@ func markdownToHTML(markdown string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(out.String()), nil
+}
+
+func unwrapOuterMarkdownFence(markdown string) string {
+	unwrapped := strings.TrimSpace(markdown)
+
+	for i := 0; i < 2; i++ {
+		next := unwrapSingleOuterMarkdownFence(unwrapped)
+		if next == unwrapped {
+			return unwrapped
+		}
+		unwrapped = next
+	}
+
+	return unwrapped
+}
+
+func unwrapSingleOuterMarkdownFence(markdown string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(markdown), "\r\n", "\n")
+	if !strings.HasPrefix(normalized, "```") || !strings.HasSuffix(normalized, "```") {
+		return strings.TrimSpace(markdown)
+	}
+
+	lines := strings.Split(normalized, "\n")
+	if len(lines) < 3 {
+		return strings.TrimSpace(markdown)
+	}
+
+	opening := strings.TrimSpace(lines[0])
+	closing := strings.TrimSpace(lines[len(lines)-1])
+	if closing != "```" || !strings.HasPrefix(opening, "```") {
+		return strings.TrimSpace(markdown)
+	}
+
+	language := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(opening, "```")))
+	if language != "" && language != "markdown" && language != "md" {
+		return strings.TrimSpace(markdown)
+	}
+
+	return strings.TrimSpace(strings.Join(lines[1:len(lines)-1], "\n"))
 }
 
 func slugifyTitle(value string) string {

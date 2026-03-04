@@ -97,3 +97,37 @@ func TestPrepareArticle_GeneratesUniqueSlugAndConvertsMarkdown(t *testing.T) {
 		t.Fatalf("expected normalized sources, got %#v", prepared.Sources)
 	}
 }
+
+func TestPrepareArticle_UnwrapsOuterMarkdownFence(t *testing.T) {
+	repo := &prepareRepoStub{exists: map[string]bool{}}
+	provider := &prepareAIStub{article: &ai.GeneratedArticle{
+		TitleEn:           "How to count calories",
+		PreviewTextRu:     "Превью",
+		PreviewTextEn:     "Preview",
+		MetaDescriptionRu: "Мета",
+		MetaDescriptionEn: "Meta",
+		ContentEn:         "<p>English article body</p>",
+	}}
+
+	svc := &service{
+		repo:           repo,
+		aiProvider:     provider,
+		aiProviderName: "openai",
+	}
+
+	prepared, err := svc.PrepareArticle(context.Background(), PrepareArticleRequest{
+		TitleRu:         "Тест заголовок",
+		DescriptionRu:   "Описание статьи",
+		ContentMarkdown: "```markdown\n# Введение\n\nОбычный текст\n```",
+	})
+	if err != nil {
+		t.Fatalf("PrepareArticle returned error: %v", err)
+	}
+
+	if strings.Contains(prepared.ContentRu, "<pre><code>") {
+		t.Fatalf("expected outer markdown fence to be unwrapped, got %q", prepared.ContentRu)
+	}
+	if !strings.Contains(prepared.ContentRu, "<h1>Введение</h1>") {
+		t.Fatalf("expected markdown content converted to html, got %q", prepared.ContentRu)
+	}
+}
