@@ -186,6 +186,26 @@ type ArticleUpdate struct {
 	TagIds            []int64  `json:"tagIds,omitempty"`
 }
 
+type PrepareArticleRequest struct {
+	TitleRu         string  `json:"titleRu"`
+	DescriptionRu   string  `json:"descriptionRu"`
+	ContentMarkdown string  `json:"contentMarkdownRu"`
+	PreviewImageUrl *string `json:"previewImageUrl,omitempty"`
+}
+
+type PrepareArticleResponse struct {
+	Slug              string   `json:"slug"`
+	TitleRu           string   `json:"titleRu"`
+	TitleEn           string   `json:"titleEn"`
+	ContentRu         string   `json:"contentRu"`
+	ContentEn         string   `json:"contentEn"`
+	PreviewTextRu     string   `json:"previewTextRu"`
+	PreviewTextEn     string   `json:"previewTextEn"`
+	MetaDescriptionRu string   `json:"metaDescriptionRu"`
+	MetaDescriptionEn string   `json:"metaDescriptionEn"`
+	Sources           []string `json:"sources,omitempty"`
+}
+
 // ===== Feedback =====
 
 type Feedback struct {

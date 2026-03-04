@@ -28,7 +28,6 @@ type Service interface {
 	CheckUserLimit(ctx context.Context, userId, requestType string) (*LimitCheckResult, error)
 	GetUserAnalysisHistory(ctx context.Context, userId string, limit int) ([]AnalysisLog, error)
 	ImproveText(ctx context.Context, userId string, html string) (string, error)
-	GenerateArticle(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error)
 	GenerateRecipeDraft(ctx context.Context, userId string, titleRu, ingredientsRu, stepsRu string, imageData []byte, imageURL, provider string) (*GeneratedRecipeDraft, error)
 }
 
@@ -468,67 +467,6 @@ func (s *service) selectGenerationProvider(provider string) (AIProvider, error) 
 	default:
 		return nil, fmt.Errorf("unknown provider %q", p)
 	}
-}
-
-// GenerateArticle generates a full RU+EN blog article based on topic/description (admin tool).
-func (s *service) GenerateArticle(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error) {
-	topic = strings.TrimSpace(topic)
-	description = strings.TrimSpace(description)
-
-	if topic == "" {
-		return nil, fmt.Errorf("topic is required")
-	}
-	if description == "" {
-		return nil, fmt.Errorf("description is required")
-	}
-	if len(topic) > 200 {
-		return nil, fmt.Errorf("topic is too long")
-	}
-	if len(description) > 2000 {
-		return nil, fmt.Errorf("description is too long")
-	}
-
-	p, err := s.selectGenerationProvider(provider)
-	if err != nil {
-		return nil, err
-	}
-
-	article, err := p.GenerateArticle(ctx, GenerateArticleRequest{Topic: topic, Description: description, Provider: provider})
-	if err != nil {
-		return nil, err
-	}
-	if article == nil {
-		return nil, fmt.Errorf("empty article")
-	}
-	if article.TitleRu == "" || article.TitleEn == "" || article.ContentRu == "" || article.ContentEn == "" {
-		return nil, fmt.Errorf("incomplete article generated")
-	}
-
-	// Normalize fields defensively (models sometimes append "(N символов)").
-	article.PreviewTextRu = StripTrailingCharCount(article.PreviewTextRu)
-	article.PreviewTextEn = StripTrailingCharCount(article.PreviewTextEn)
-	article.MetaDescriptionRu = StripTrailingCharCount(article.MetaDescriptionRu)
-	article.MetaDescriptionEn = StripTrailingCharCount(article.MetaDescriptionEn)
-	article.ContentRu = StripInlineNumericCitations(article.ContentRu)
-	article.ContentEn = StripInlineNumericCitations(article.ContentEn)
-	article.ContentRu = EnsureAtLeastOneImageMarker(article.ContentRu, "")
-	article.ContentEn = EnsureAtLeastOneImageMarker(article.ContentEn, "")
-	article.Sources = NormalizeSourceURLs(article.Sources)
-	if NormalizeGeneratedArticleLanguages(article) && s.logger != nil {
-		s.logger.Warn(
-			"GenerateArticle detected swapped RU/EN fields and normalized response",
-			"provider",
-			strings.ToLower(strings.TrimSpace(provider)),
-		)
-	}
-
-	ruWords := ApproxWordCountFromHTML(article.ContentRu)
-	enWords := ApproxWordCountFromHTML(article.ContentEn)
-	if s.logger != nil && (ruWords < 900 || enWords < 900) {
-		s.logger.Warn("GenerateArticle produced short content", "provider", strings.ToLower(strings.TrimSpace(provider)), "ru_words", ruWords, "en_words", enWords)
-	}
-
-	return article, nil
 }
 
 func (s *service) GenerateRecipeDraft(

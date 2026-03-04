@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
@@ -53,6 +54,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 			r.Use(requireAdmin)
 
 			// Articles
+			r.Post("/admin/articles/prepare", c.PrepareArticle)
 			r.Post("/admin/articles", c.CreateArticle)
 			r.Put("/admin/articles/{id}", c.UpdateArticle)
 			r.Delete("/admin/articles/{id}", c.DeleteArticle)
@@ -81,6 +83,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║    GET /blog/tags (get all tags)")
 	logger.Info("║   POST /blog/articles/{id}/feedback (submit feedback)")
 	logger.Info("║    GET /blog/articles/{id}/feedback/stats (get feedback stats)")
+	logger.Info("║   POST /blog/admin/articles/prepare (admin: prepare article from RU markdown)")
 	logger.Info("║   POST /blog/admin/articles (admin: create article)")
 	logger.Info("║    PUT /blog/admin/articles/{id} (admin: update article)")
 	logger.Info("║ DELETE /blog/admin/articles/{id} (admin: delete article)")
@@ -306,6 +309,50 @@ func (c *Controller) GetFeedbackStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // ===== Admin Articles =====
+
+func (c *Controller) PrepareArticle(w http.ResponseWriter, r *http.Request) {
+	var req PrepareArticleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	req.TitleRu = strings.TrimSpace(req.TitleRu)
+	req.DescriptionRu = strings.TrimSpace(req.DescriptionRu)
+	req.ContentMarkdown = strings.TrimSpace(req.ContentMarkdown)
+	if req.PreviewImageUrl != nil {
+		trimmed := strings.TrimSpace(*req.PreviewImageUrl)
+		if trimmed == "" {
+			req.PreviewImageUrl = nil
+		} else {
+			req.PreviewImageUrl = &trimmed
+		}
+	}
+
+	if req.TitleRu == "" {
+		http.Error(w, "titleRu is required", http.StatusBadRequest)
+		return
+	}
+	if req.DescriptionRu == "" {
+		http.Error(w, "descriptionRu is required", http.StatusBadRequest)
+		return
+	}
+	if req.ContentMarkdown == "" {
+		http.Error(w, "contentMarkdownRu is required", http.StatusBadRequest)
+		return
+	}
+
+	prepared, err := c.service.PrepareArticle(r.Context(), req)
+	if err != nil {
+		logger.Error("failed to prepare article", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(prepared)
+}
 
 func (c *Controller) CreateArticle(w http.ResponseWriter, r *http.Request) {
 	var articleCreate ArticleCreate

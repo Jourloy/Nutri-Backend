@@ -531,7 +531,29 @@ func (p *PerplexityProvider) ImproveText(ctx context.Context, html string) (stri
 }
 
 func (p *PerplexityProvider) GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error) {
+	isPrepareMode := strings.TrimSpace(req.ContentRu) != "" || strings.TrimSpace(req.TitleRu) != ""
+
+	systemPrompt := generateArticleSystemPrompt
 	userMessage := fmt.Sprintf("Topic: %s\nDescription: %s", req.Topic, req.Description)
+	maxTokens := 8000
+	temperature := 0.4
+
+	if isPrepareMode {
+		systemPrompt = prepareArticleFromRuSystemPrompt
+		userMessage = fmt.Sprintf(`TitleRu: %s
+DescriptionRu: %s
+
+ContentRuHtml:
+%s
+
+Execution requirements:
+- Keep Russian meaning and structure aligned to ContentRuHtml.
+- contentRu in response must stay close to provided Russian content.
+- Generate a high-quality English counterpart in contentEn.
+- Return only JSON required by system prompt.`, req.TitleRu, req.Description, req.ContentRu)
+		maxTokens = 9000
+		temperature = 0.2
+	}
 
 	jsonSchema := map[string]interface{}{
 		"type": "object",
@@ -561,11 +583,11 @@ func (p *PerplexityProvider) GenerateArticle(ctx context.Context, req GenerateAr
 	payload := map[string]interface{}{
 		"model": "sonar-pro",
 		"messages": []map[string]interface{}{
-			{"role": "system", "content": generateArticleSystemPrompt},
+			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userMessage},
 		},
-		"max_tokens":  8000,
-		"temperature": 0.4,
+		"max_tokens":  maxTokens,
+		"temperature": temperature,
 		"response_format": map[string]interface{}{
 			"type": "json_schema",
 			"json_schema": map[string]interface{}{

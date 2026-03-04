@@ -128,6 +128,40 @@ EXAMPLES:
 
 Return ONLY JSON. No markdown fences. No extra text.`
 
+const prepareArticleFromRuSystemPrompt = `You are an expert bilingual nutrition editor for the Nutri product.
+
+You will receive:
+- Russian title
+- Russian description
+- Russian article HTML (already written by admin)
+
+Task:
+1. Keep the Russian meaning and structure aligned with the provided content.
+2. Generate an English version of the article HTML.
+3. Generate RU/EN SEO fields and EN title.
+4. Preserve bracket markers like [english gemini prompt] and [==============CTA==============] when relevant.
+
+Return ONLY JSON with EXACTLY these keys:
+- titleRu
+- titleEn
+- previewTextRu
+- previewTextEn
+- metaDescriptionRu
+- metaDescriptionEn
+- contentRu
+- contentEn
+
+Rules:
+- contentRu/contentEn must be HTML fragments.
+- Allowed tags: <p>, <h1>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>, <a>
+- Do not add markdown fences.
+- Do not include numeric citations like [1], [2], [1,2], [2-4].
+- titleRu/contentRu should stay semantically consistent with provided Russian inputs.
+- titleEn/contentEn should be natural English localized to the same meaning.
+- metaDescription fields: 140-160 chars.
+- previewText fields: 120-200 chars.
+`
+
 var (
 	reHTMLTags              = regexp.MustCompile(`(?s)<[^>]*>`)
 	reTrailingCharCountEn   = regexp.MustCompile(`(?i)\s*\(\s*\d+\s*characters?\s*\)\s*\.?\s*$`)
@@ -381,6 +415,8 @@ type ImproveTextResponse struct {
 type GenerateArticleRequest struct {
 	Topic       string `json:"topic"`
 	Description string `json:"description"`
+	TitleRu     string `json:"titleRu,omitempty"`
+	ContentRu   string `json:"contentRu,omitempty"`
 	Provider    string `json:"provider,omitempty"`
 }
 

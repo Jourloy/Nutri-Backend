@@ -18,7 +18,6 @@ import (
 
 type fakeService struct {
 	improveFn func(ctx context.Context, userId string, html string) (string, error)
-	genFn     func(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error)
 	draftFn   func(ctx context.Context, userId string, titleRu, ingredientsRu, stepsRu string, imageData []byte, imageURL, provider string) (*GeneratedRecipeDraft, error)
 }
 
@@ -43,23 +42,6 @@ func (f fakeService) ImproveText(ctx context.Context, userId string, html string
 		return f.improveFn(ctx, userId, html)
 	}
 	return "<p>ok</p>", nil
-}
-
-func (f fakeService) GenerateArticle(ctx context.Context, userId string, topic string, description string, provider string) (*GeneratedArticle, error) {
-	if f.genFn != nil {
-		return f.genFn(ctx, userId, topic, description, provider)
-	}
-	return &GeneratedArticle{
-		TitleRu:           "RU title",
-		TitleEn:           "EN title",
-		PreviewTextRu:     "RU preview",
-		PreviewTextEn:     "EN preview",
-		MetaDescriptionRu: "RU meta",
-		MetaDescriptionEn: "EN meta",
-		ContentRu:         "<p>RU</p>",
-		ContentEn:         "<p>EN</p>",
-		Sources:           []string{"https://example.com/source"},
-	}, nil
 }
 
 func (f fakeService) GenerateRecipeDraft(
@@ -144,97 +126,20 @@ func TestImproveText_SuccessForAdmin(t *testing.T) {
 	}
 }
 
-func TestGenerateArticle_Unauthorized(t *testing.T) {
+func TestGenerateArticleRouteRemoved(t *testing.T) {
 	r := chi.NewRouter()
 	c := &Controller{service: fakeService{}}
 	c.RegisterRoutes(r)
 
 	req := httptest.NewRequest(http.MethodPost, "/ai/generate-article", strings.NewReader(`{"topic":"T","description":"D"}`))
 	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, rr.Code)
-	}
-}
-
-func TestGenerateArticle_ForbiddenForNonAdmin(t *testing.T) {
-	r := chi.NewRouter()
-	c := &Controller{service: fakeService{}}
-	c.RegisterRoutes(r)
-
-	req := httptest.NewRequest(http.MethodPost, "/ai/generate-article", strings.NewReader(`{"topic":"T","description":"D"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: false}))
-
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rr.Code)
-	}
-}
-
-func TestGenerateArticle_Validation(t *testing.T) {
-	r := chi.NewRouter()
-	c := &Controller{service: fakeService{}}
-	c.RegisterRoutes(r)
-
-	req := httptest.NewRequest(http.MethodPost, "/ai/generate-article", strings.NewReader(`{"topic":"","description":""}`))
-	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: true}))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rr.Code)
-	}
-}
-
-func TestGenerateArticle_SuccessForAdmin(t *testing.T) {
-	r := chi.NewRouter()
-	c := &Controller{service: fakeService{}}
-	c.RegisterRoutes(r)
-
-	req := httptest.NewRequest(http.MethodPost, "/ai/generate-article", strings.NewReader(`{"topic":"T","description":"D","provider":"openai"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: true}))
-
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
-	}
-
-	var out GeneratedArticle
-	if err := json.NewDecoder(rr.Body).Decode(&out); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if out.TitleRu == "" || out.TitleEn == "" || out.ContentRu == "" || out.ContentEn == "" {
-		t.Fatalf("expected filled article fields")
-	}
-	if len(out.Sources) != 1 || out.Sources[0] != "https://example.com/source" {
-		t.Fatalf("expected sources in response, got %#v", out.Sources)
-	}
-}
-
-func TestGenerateArticle_InvalidProvider(t *testing.T) {
-	r := chi.NewRouter()
-	c := &Controller{service: fakeService{}}
-	c.RegisterRoutes(r)
-
-	req := httptest.NewRequest(http.MethodPost, "/ai/generate-article", strings.NewReader(`{"topic":"T","description":"D","provider":"nope"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(auth.ContextWithUser(req.Context(), user.User{Id: "u1", IsAdmin: true}))
-
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rr.Code)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected %d, got %d", http.StatusNotFound, rr.Code)
 	}
 }
 

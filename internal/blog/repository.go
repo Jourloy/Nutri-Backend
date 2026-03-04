@@ -34,6 +34,7 @@ type Repository interface {
 	DeleteArticle(ctx context.Context, id int64) error
 	GetArticleById(ctx context.Context, id int64) (*Article, error)
 	GetArticleBySlug(ctx context.Context, slug string) (*Article, error)
+	ArticleSlugExists(ctx context.Context, slug string) (bool, error)
 	GetArticles(ctx context.Context, params ArticleListParams, includeAll bool) (*ArticleListResponse, error)
 	IncrementViewCount(ctx context.Context, id int64) error
 	UpdateReadingTime(ctx context.Context, id int64, minutes int) error
@@ -346,6 +347,16 @@ func (r *repository) GetArticleBySlug(ctx context.Context, slug string) (*Articl
 		return nil, err
 	}
 	return &article, nil
+}
+
+func (r *repository) ArticleSlugExists(ctx context.Context, slug string) (bool, error) {
+	const q = `SELECT EXISTS(SELECT 1 FROM blog_articles WHERE slug = $1)`
+
+	var exists bool
+	if err := r.db.GetContext(ctx, &exists, q, slug); err != nil {
+		return false, err
+	}
+	return exists, nil
 }
 
 func (r *repository) GetArticles(ctx context.Context, params ArticleListParams, includeAll bool) (*ArticleListResponse, error) {

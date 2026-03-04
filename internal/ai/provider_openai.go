@@ -333,6 +333,9 @@ func (p *OpenAIProvider) ImproveText(ctx context.Context, html string) (string, 
 }
 
 func (p *OpenAIProvider) GenerateArticle(ctx context.Context, req GenerateArticleRequest) (*GeneratedArticle, error) {
+	isPrepareMode := strings.TrimSpace(req.ContentRu) != "" || strings.TrimSpace(req.TitleRu) != ""
+
+	systemPrompt := generateArticleSystemPrompt
 	userMessage := fmt.Sprintf(`Topic: %s
 Description: %s
 
@@ -343,6 +346,25 @@ Execution requirements:
 - Include at least one Gemini image marker in each language: [english gemini image prompt].
 - Do not include numeric citation markers in text like [1], [2], [1,2], [2-4].
 - Return only the JSON object required by the system prompt.`, req.Topic, req.Description)
+	maxTokens := 12000
+	temperature := float32(0.4)
+
+	if isPrepareMode {
+		systemPrompt = prepareArticleFromRuSystemPrompt
+		userMessage = fmt.Sprintf(`TitleRu: %s
+DescriptionRu: %s
+
+ContentRuHtml:
+%s
+
+Execution requirements:
+- Keep Russian meaning and structure aligned to ContentRuHtml.
+- contentRu in response must stay close to provided Russian content.
+- Generate a high-quality English counterpart in contentEn.
+- Return only JSON required by system prompt.`, req.TitleRu, req.Description, req.ContentRu)
+		maxTokens = 9000
+		temperature = float32(0.2)
+	}
 
 	resp, err := p.client.CreateChatCompletion(
 		ctx,
@@ -351,15 +373,15 @@ Execution requirements:
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleSystem,
-					Content: generateArticleSystemPrompt,
+					Content: systemPrompt,
 				},
 				{
 					Role:    openai.ChatMessageRoleUser,
 					Content: userMessage,
 				},
 			},
-			MaxTokens:   12000,
-			Temperature: 0.4,
+			MaxTokens:   maxTokens,
+			Temperature: temperature,
 		},
 	)
 	if err != nil {
