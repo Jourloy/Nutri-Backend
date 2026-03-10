@@ -25,6 +25,7 @@ type stubRepo struct {
 	getCycleDayLogsFn       func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error)
 	startCycleFn            func(ctx context.Context, userId string, startDate time.Time) error
 	stopCycleFn             func(ctx context.Context, userId string, endDate time.Time) (*Cycle, error)
+	createHistoricalCycleFn func(ctx context.Context, userId string, startDate, endDate time.Time) (*Cycle, error)
 }
 
 func (s stubRepo) CreateWeight(ctx context.Context, w WeightCreate) (*Weight, error) {
@@ -163,6 +164,16 @@ func (s stubRepo) StopCycle(ctx context.Context, userId string, endDate time.Tim
 		return s.stopCycleFn(ctx, userId, endDate)
 	}
 	return nil, nil
+}
+func (s stubRepo) CreateHistoricalCycle(
+	ctx context.Context,
+	userId string,
+	startDate, endDate time.Time,
+) (*Cycle, error) {
+	if s.createHistoricalCycleFn != nil {
+		return s.createHistoricalCycleFn(ctx, userId, startDate, endDate)
+	}
+	return &Cycle{Id: 1, UserId: userId, StartDate: startDate, EndDate: &endDate}, nil
 }
 func (s stubRepo) GetOpenCycle(ctx context.Context, userId string) (*Cycle, error) {
 	if s.getOpenCycleFn != nil {
@@ -318,6 +329,15 @@ func TestGetCycleTimeline_DefaultForecast(t *testing.T) {
 	if timeline.Summary.PeriodLengthDays != 5 {
 		t.Fatalf("expected default period length 5, got %d", timeline.Summary.PeriodLengthDays)
 	}
+	if timeline.Summary.HasCycleSeed {
+		t.Fatalf("expected no cycle seed")
+	}
+	if timeline.Summary.HasActiveCycle {
+		t.Fatalf("expected no active cycle")
+	}
+	if timeline.Summary.ActiveCycleStart != nil {
+		t.Fatalf("expected no active cycle start, got %v", timeline.Summary.ActiveCycleStart)
+	}
 	if timeline.Summary.Phase != cyclePhaseFollicular {
 		t.Fatalf("expected follicular phase, got %s", timeline.Summary.Phase)
 	}
@@ -385,6 +405,12 @@ func TestGetCycleTimeline_MedianForecast(t *testing.T) {
 	}
 	if timeline.Summary.PredictedOvulationDate == nil || *timeline.Summary.PredictedOvulationDate != "2025-06-07" {
 		t.Fatalf("unexpected ovulation date: %v", timeline.Summary.PredictedOvulationDate)
+	}
+	if !timeline.Summary.HasCycleSeed {
+		t.Fatalf("expected cycle seed to be present")
+	}
+	if timeline.Summary.HasActiveCycle {
+		t.Fatalf("expected no active cycle")
 	}
 }
 
@@ -515,6 +541,44 @@ func TestGetCycleTimeline_UsesDayLogsMarkers(t *testing.T) {
 	}
 }
 
+func TestGetCycleTimeline_ExposesActiveCycleState(t *testing.T) {
+	openCycle := &Cycle{StartDate: mustDate(t, "2026-02-10")}
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return []Cycle{*openCycle}, nil
+			},
+			getOpenCycleFn: func(ctx context.Context, userId string) (*Cycle, error) {
+				return openCycle, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return nil, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2026-02-16")
+	to := mustDate(t, "2026-02-22")
+	at := mustDate(t, "2026-02-18")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	if !timeline.Summary.HasActiveCycle {
+		t.Fatalf("expected active cycle")
+	}
+	if timeline.Summary.ActiveCycleStart == nil || *timeline.Summary.ActiveCycleStart != "2026-02-10" {
+		t.Fatalf("unexpected activeCycleStart: %v", timeline.Summary.ActiveCycleStart)
+	}
+}
+
 func TestGetCycleCatalog_NonFemaleForbidden(t *testing.T) {
 	svc := &service{
 		repo: stubRepo{
@@ -545,6 +609,121 @@ func TestStopCycle_NoActiveCycle(t *testing.T) {
 	_, err := svc.StopCycle(context.Background(), "u1", mustDate(t, "2026-02-18"))
 	if !errors.Is(err, ErrCycleNoActive) {
 		t.Fatalf("expected ErrCycleNoActive, got %v", err)
+	}
+}
+
+func TestSeedCycle_StartedCreatesOpenCycle(t *testing.T) {
+	var cycles []Cycle
+	var openCycle *Cycle
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getPeriodDaysFn: func(ctx context.Context, userId string, from, to time.Time) (map[string]bool, error) {
+				return map[string]bool{}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return cycles, nil
+			},
+			getOpenCycleFn: func(ctx context.Context, userId string) (*Cycle, error) {
+				return openCycle, nil
+			},
+			startCycleFn: func(ctx context.Context, userId string, startDate time.Time) error {
+				openCycle = &Cycle{StartDate: startDate}
+				cycles = append(cycles, *openCycle)
+				return nil
+			},
+		},
+	}
+
+	summary, err := svc.SeedCycle(context.Background(), "u1", CycleSeedInput{
+		Mode:     cycleSeedModeStarted,
+		LoggedAt: mustDate(t, "2026-02-18"),
+	})
+	if err != nil {
+		t.Fatalf("SeedCycle returned error: %v", err)
+	}
+
+	if summary.CurrentCycleStart == nil || *summary.CurrentCycleStart != "2026-02-18" {
+		t.Fatalf("unexpected currentCycleStart: %v", summary.CurrentCycleStart)
+	}
+	if openCycle == nil || openCycle.StartDate.Format("2006-01-02") != "2026-02-18" {
+		t.Fatalf("expected open cycle to start on 2026-02-18")
+	}
+}
+
+func TestSeedCycle_EndedBackfillsClosedCycle(t *testing.T) {
+	var created *Cycle
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getPeriodDaysFn: func(ctx context.Context, userId string, from, to time.Time) (map[string]bool, error) {
+				return map[string]bool{}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				if created == nil {
+					return nil, nil
+				}
+				return []Cycle{*created}, nil
+			},
+			getOpenCycleFn: func(ctx context.Context, userId string) (*Cycle, error) {
+				return nil, nil
+			},
+			createHistoricalCycleFn: func(ctx context.Context, userId string, startDate, endDate time.Time) (*Cycle, error) {
+				created = &Cycle{StartDate: startDate, EndDate: &endDate}
+				return created, nil
+			},
+		},
+	}
+
+	summary, err := svc.SeedCycle(context.Background(), "u1", CycleSeedInput{
+		Mode:     cycleSeedModeEnded,
+		LoggedAt: mustDate(t, "2026-02-18"),
+	})
+	if err != nil {
+		t.Fatalf("SeedCycle returned error: %v", err)
+	}
+
+	if created == nil {
+		t.Fatalf("expected historical cycle to be created")
+	}
+	if created.StartDate.Format("2006-01-02") != "2026-02-14" {
+		t.Fatalf("expected inferred start 2026-02-14, got %s", created.StartDate.Format("2006-01-02"))
+	}
+	if created.EndDate == nil || created.EndDate.Format("2006-01-02") != "2026-02-18" {
+		t.Fatalf("unexpected end date: %v", created.EndDate)
+	}
+	if summary.CurrentCycleEnd == nil || *summary.CurrentCycleEnd != "2026-02-18" {
+		t.Fatalf("unexpected currentCycleEnd: %v", summary.CurrentCycleEnd)
+	}
+}
+
+func TestSeedCycle_RejectsFutureDate(t *testing.T) {
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+		},
+	}
+
+	_, err := svc.SeedCycle(context.Background(), "u1", CycleSeedInput{
+		Mode:     cycleSeedModeStarted,
+		LoggedAt: dateOnly(time.Now()).AddDate(0, 0, 1),
+	})
+	if !errors.Is(err, ErrCycleDateInvalid) {
+		t.Fatalf("expected ErrCycleDateInvalid, got %v", err)
 	}
 }
 

@@ -64,6 +64,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Get("/cycle/timeline", c.GetCycleTimeline)
 		r.Get("/cycle/day", c.GetCycleDayLogs)
 		r.Put("/cycle/day", c.UpsertCycleDay)
+		r.Post("/cycle/seed", c.SeedCycle)
 		r.Post("/cycle/start", c.StartCycle)
 		r.Post("/cycle/stop", c.StopCycle)
 	})
@@ -97,6 +98,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║    GET /cycle/timeline?from=&to=&date=")
 	logger.Info("║    GET /cycle/day?from=&to=")
 	logger.Info("║    PUT /cycle/day")
+	logger.Info("║   POST /cycle/seed")
 	logger.Info("║   POST /cycle/start")
 	logger.Info("║   POST /cycle/stop")
 	logger.Info("╚═════")
@@ -949,6 +951,44 @@ func (c *Controller) StartCycle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := c.service.StartCycle(context.Background(), u.Id, loggedAt)
+	if err != nil {
+		c.writeCycleError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func (c *Controller) SeedCycle(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		Mode     string  `json:"mode"`
+		LoggedAt *string `json:"loggedAt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.LoggedAt == nil || *body.LoggedAt == "" {
+		http.Error(w, "invalid loggedAt format, expected YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	loggedAt, err := parseDate(*body.LoggedAt)
+	if err != nil {
+		http.Error(w, "invalid loggedAt format, expected YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	res, err := c.service.SeedCycle(context.Background(), u.Id, CycleSeedInput{
+		Mode:     body.Mode,
+		LoggedAt: loggedAt,
+	})
 	if err != nil {
 		c.writeCycleError(w, err)
 		return

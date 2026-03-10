@@ -55,6 +55,7 @@ type Repository interface {
 	// Cycle tracking
 	StartCycle(ctx context.Context, userId string, startDate time.Time) error
 	StopCycle(ctx context.Context, userId string, endDate time.Time) (*Cycle, error)
+	CreateHistoricalCycle(ctx context.Context, userId string, startDate, endDate time.Time) (*Cycle, error)
 	GetOpenCycle(ctx context.Context, userId string) (*Cycle, error)
 	GetCycles(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error)
 	UpsertCycleDayLog(ctx context.Context, userId string, loggedAt time.Time, flowIntensity, note *string) (int64, error)
@@ -620,6 +621,23 @@ func (r *repository) StopCycle(ctx context.Context, userId string, endDate time.
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+		return nil, err
+	}
+	return &cycle, nil
+}
+
+func (r *repository) CreateHistoricalCycle(
+	ctx context.Context,
+	userId string,
+	startDate, endDate time.Time,
+) (*Cycle, error) {
+	var cycle Cycle
+	err := r.db.GetContext(ctx, &cycle, `
+        INSERT INTO body_cycles (user_id, start_date, end_date)
+        VALUES ($1, $2::date, $3::date)
+        RETURNING id, user_id, start_date, end_date, created_at, updated_at`,
+		userId, startDate, endDate)
+	if err != nil {
 		return nil, err
 	}
 	return &cycle, nil

@@ -144,6 +144,11 @@ type CycleDayEventInput struct {
 	Intensity     *string
 }
 
+type CycleSeedInput struct {
+	Mode     string
+	LoggedAt time.Time
+}
+
 type CycleCatalogEvent struct {
 	Code string `json:"code"`
 }
@@ -190,6 +195,9 @@ type CycleTimelineSummary struct {
 	Phase                  string  `json:"phase"`
 	PhaseSource            string  `json:"phaseSource"`
 	PeriodStatus           string  `json:"periodStatus"`
+	HasCycleSeed           bool    `json:"hasCycleSeed"`
+	HasActiveCycle         bool    `json:"hasActiveCycle"`
+	ActiveCycleStart       *string `json:"activeCycleStart,omitempty"`
 	CycleDayNumber         int     `json:"cycleDayNumber"`
 	PredictedOvulationDate *string `json:"predictedOvulationDate,omitempty"`
 	FertileWindowStart     *string `json:"fertileWindowStart,omitempty"`

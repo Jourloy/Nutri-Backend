@@ -32,6 +32,9 @@ const (
 	cyclePeriodRecorded  = "recorded"
 	cyclePeriodPredicted = "predicted"
 
+	cycleSeedModeStarted = "started"
+	cycleSeedModeEnded   = "ended"
+
 	dropletStateFilling  = "filling"
 	dropletStateEmptying = "emptying"
 	dropletStateSteady   = "steady"
@@ -206,6 +209,7 @@ type Service interface {
 	GetCycleTimeline(ctx context.Context, userId string, from, to, at *time.Time) (*CycleTimeline, error)
 	GetCycleDayLogs(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error)
 	UpsertCycleDay(ctx context.Context, userId string, input CycleDayUpsertInput) (*CycleDayLog, error)
+	SeedCycle(ctx context.Context, userId string, input CycleSeedInput) (*CycleSummary, error)
 	StartCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error)
 	StopCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error)
 }
@@ -743,6 +747,10 @@ func (s *service) GetCycleTimeline(
 	if err != nil {
 		return nil, err
 	}
+	openCycle, err := s.repo.GetOpenCycle(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
 	logs, err := s.repo.GetCycleDayLogs(ctx, userId, &rangeStart, &rangeEnd)
 	if err != nil {
 		return nil, err
@@ -778,6 +786,12 @@ func (s *service) GetCycleTimeline(
 		currentCycleStart = &value
 	}
 
+	var activeCycleStart *string
+	if openCycle != nil {
+		value := dateOnly(openCycle.StartDate).Format("2006-01-02")
+		activeCycleStart = &value
+	}
+
 	var currentCycleEnd *string
 	if selectedState.CurrentCycleEnd != nil {
 		value := selectedState.CurrentCycleEnd.Format("2006-01-02")
@@ -807,6 +821,9 @@ func (s *service) GetCycleTimeline(
 		Phase:                  selectedState.Phase,
 		PhaseSource:            selectedState.PhaseSource,
 		PeriodStatus:           selectedState.PeriodStatus,
+		HasCycleSeed:           len(cycles) > 0,
+		HasActiveCycle:         openCycle != nil,
+		ActiveCycleStart:       activeCycleStart,
 		CycleDayNumber:         selectedState.CycleDayNumber,
 		PredictedOvulationDate: &predictedOvulation,
 		FertileWindowStart:     &fertileStart,
@@ -897,6 +914,48 @@ func (s *service) StartCycle(ctx context.Context, userId string, at time.Time) (
 	when = dateOnly(when)
 
 	if err := s.repo.StartCycle(ctx, userId, when); err != nil {
+		return nil, err
+	}
+	return s.GetCycleSummary(ctx, userId, &when)
+}
+
+func (s *service) SeedCycle(ctx context.Context, userId string, input CycleSeedInput) (*CycleSummary, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	mode, err := normalizeCycleSeedMode(input.Mode)
+	if err != nil {
+		return nil, err
+	}
+
+	when := dateOnly(input.LoggedAt)
+	if when.IsZero() {
+		when = dateOnly(time.Now())
+	}
+	if when.After(dateOnly(time.Now())) {
+		return nil, ErrCycleDateInvalid
+	}
+
+	if mode == cycleSeedModeStarted {
+		return s.StartCycle(ctx, userId, when)
+	}
+
+	openCycle, err := s.repo.GetOpenCycle(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+	if openCycle != nil {
+		return nil, ErrCycleInputInvalid
+	}
+
+	cycles, err := s.repo.GetCycles(ctx, userId, nil, nil, 128)
+	if err != nil {
+		return nil, err
+	}
+	_, periodLen, _ := deriveCycleForecast(cycles)
+	startDate := when.AddDate(0, 0, -(maxInt(periodLen, 1) - 1))
+	if _, err := s.repo.CreateHistoricalCycle(ctx, userId, startDate, when); err != nil {
 		return nil, err
 	}
 	return s.GetCycleSummary(ctx, userId, &when)
@@ -1490,6 +1549,16 @@ func cycleConfidence(historyCount int) string {
 		return "medium"
 	default:
 		return "low"
+	}
+}
+
+func normalizeCycleSeedMode(value string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(value))
+	switch mode {
+	case cycleSeedModeStarted, cycleSeedModeEnded:
+		return mode, nil
+	default:
+		return "", ErrCycleInputInvalid
 	}
 }
 
