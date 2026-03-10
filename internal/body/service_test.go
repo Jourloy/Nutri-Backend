@@ -286,6 +286,235 @@ func TestGetCycleSummary_MedianForecast(t *testing.T) {
 	}
 }
 
+func TestGetCycleTimeline_DefaultForecast(t *testing.T) {
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return []Cycle{}, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return nil, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2026-02-16")
+	to := mustDate(t, "2026-02-22")
+	at := mustDate(t, "2026-02-18")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	if timeline.Summary.CycleLengthDays != 28 {
+		t.Fatalf("expected default cycle length 28, got %d", timeline.Summary.CycleLengthDays)
+	}
+	if timeline.Summary.PeriodLengthDays != 5 {
+		t.Fatalf("expected default period length 5, got %d", timeline.Summary.PeriodLengthDays)
+	}
+	if timeline.Summary.Phase != cyclePhaseFollicular {
+		t.Fatalf("expected follicular phase, got %s", timeline.Summary.Phase)
+	}
+	if timeline.Summary.PeriodStatus != cyclePeriodNone {
+		t.Fatalf("expected no period status, got %s", timeline.Summary.PeriodStatus)
+	}
+	if timeline.Summary.CycleDayNumber != 6 {
+		t.Fatalf("expected cycle day 6, got %d", timeline.Summary.CycleDayNumber)
+	}
+	if timeline.Summary.DaysUntilNextPeriod != 23 {
+		t.Fatalf("expected 23 days until next period, got %d", timeline.Summary.DaysUntilNextPeriod)
+	}
+	if timeline.Summary.DropletFillRatio != 0.08 {
+		t.Fatalf("expected droplet fill 0.08, got %.2f", timeline.Summary.DropletFillRatio)
+	}
+}
+
+func TestGetCycleTimeline_MedianForecast(t *testing.T) {
+	cycles := []Cycle{
+		{StartDate: mustDate(t, "2025-05-24"), EndDate: ptrDate(mustDate(t, "2025-05-29"))},
+		{StartDate: mustDate(t, "2025-04-27"), EndDate: ptrDate(mustDate(t, "2025-05-02"))},
+		{StartDate: mustDate(t, "2025-03-30"), EndDate: ptrDate(mustDate(t, "2025-04-03"))},
+		{StartDate: mustDate(t, "2025-03-02"), EndDate: ptrDate(mustDate(t, "2025-03-07"))},
+	}
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1700, Protein: 100, Fat: 50, Carbs: 200}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return cycles, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return nil, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2025-05-24")
+	to := mustDate(t, "2025-06-04")
+	at := mustDate(t, "2025-05-25")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	if timeline.Summary.Phase != cyclePhaseMenstrual {
+		t.Fatalf("expected menstrual phase, got %s", timeline.Summary.Phase)
+	}
+	if timeline.Summary.PeriodStatus != cyclePeriodRecorded {
+		t.Fatalf("expected recorded period, got %s", timeline.Summary.PeriodStatus)
+	}
+	if timeline.Summary.CurrentCycleStart == nil || *timeline.Summary.CurrentCycleStart != "2025-05-24" {
+		t.Fatalf("unexpected currentCycleStart: %v", timeline.Summary.CurrentCycleStart)
+	}
+	if timeline.Summary.CurrentCycleEnd == nil || *timeline.Summary.CurrentCycleEnd != "2025-05-29" {
+		t.Fatalf("unexpected currentCycleEnd: %v", timeline.Summary.CurrentCycleEnd)
+	}
+	if timeline.Summary.PredictedNextStart == nil || *timeline.Summary.PredictedNextStart != "2025-06-21" {
+		t.Fatalf("unexpected predictedNextStart: %v", timeline.Summary.PredictedNextStart)
+	}
+	if timeline.Summary.PredictedOvulationDate == nil || *timeline.Summary.PredictedOvulationDate != "2025-06-07" {
+		t.Fatalf("unexpected ovulation date: %v", timeline.Summary.PredictedOvulationDate)
+	}
+}
+
+func TestGetCycleTimeline_RecordedPeriodOverridesForecast(t *testing.T) {
+	cycles := []Cycle{
+		{StartDate: mustDate(t, "2025-05-24"), EndDate: ptrDate(mustDate(t, "2025-05-25"))},
+		{StartDate: mustDate(t, "2025-04-27"), EndDate: ptrDate(mustDate(t, "2025-05-02"))},
+		{StartDate: mustDate(t, "2025-03-30"), EndDate: ptrDate(mustDate(t, "2025-04-03"))},
+		{StartDate: mustDate(t, "2025-03-02"), EndDate: ptrDate(mustDate(t, "2025-03-07"))},
+	}
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return cycles, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return nil, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2025-05-26")
+	to := mustDate(t, "2025-05-28")
+	at := mustDate(t, "2025-05-27")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	if timeline.Summary.Phase != cyclePhaseFollicular {
+		t.Fatalf("expected follicular phase after recorded stop, got %s", timeline.Summary.Phase)
+	}
+	if timeline.Summary.PeriodStatus != cyclePeriodNone {
+		t.Fatalf("expected no period status after recorded stop, got %s", timeline.Summary.PeriodStatus)
+	}
+}
+
+func TestGetCycleTimeline_FutureRangeRepeatsPredictedCycles(t *testing.T) {
+	cycles := []Cycle{
+		{StartDate: mustDate(t, "2025-05-24"), EndDate: ptrDate(mustDate(t, "2025-05-29"))},
+		{StartDate: mustDate(t, "2025-04-27"), EndDate: ptrDate(mustDate(t, "2025-05-02"))},
+		{StartDate: mustDate(t, "2025-03-30"), EndDate: ptrDate(mustDate(t, "2025-04-03"))},
+		{StartDate: mustDate(t, "2025-03-02"), EndDate: ptrDate(mustDate(t, "2025-03-07"))},
+	}
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1700, Protein: 100, Fat: 50, Carbs: 200}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return cycles, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return nil, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2025-06-20")
+	to := mustDate(t, "2025-07-25")
+	at := mustDate(t, "2025-06-22")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	if findTimelineDay(t, timeline, "2025-06-21").PeriodStatus != cyclePeriodPredicted {
+		t.Fatalf("expected 2025-06-21 to be a predicted period day")
+	}
+	if findTimelineDay(t, timeline, "2025-07-19").PeriodStatus != cyclePeriodPredicted {
+		t.Fatalf("expected 2025-07-19 to be a repeated predicted period day")
+	}
+	if !findTimelineDay(t, timeline, "2025-07-05").IsOvulationDay {
+		t.Fatalf("expected 2025-07-05 to be marked as ovulation day")
+	}
+}
+
+func TestGetCycleTimeline_UsesDayLogsMarkers(t *testing.T) {
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return nil, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return []CycleDayLog{
+					{
+						Id:            1,
+						LoggedAt:      "2026-02-18",
+						FlowIntensity: ptrString("medium"),
+						Events:        []CycleDailyEvent{},
+					},
+				}, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2026-02-16")
+	to := mustDate(t, "2026-02-22")
+	at := mustDate(t, "2026-02-18")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	day := findTimelineDay(t, timeline, "2026-02-18")
+	if !day.HasLog {
+		t.Fatalf("expected log marker on 2026-02-18")
+	}
+	if day.FlowIntensity == nil || *day.FlowIntensity != "medium" {
+		t.Fatalf("expected medium flow marker, got %v", day.FlowIntensity)
+	}
+}
+
 func TestGetCycleCatalog_NonFemaleForbidden(t *testing.T) {
 	svc := &service{
 		repo: stubRepo{
@@ -556,4 +785,15 @@ func ptrString(value string) *string {
 
 func ptrInt(value int) *int {
 	return &value
+}
+
+func findTimelineDay(t *testing.T, timeline *CycleTimeline, date string) CycleTimelineDay {
+	t.Helper()
+	for _, day := range timeline.Days {
+		if day.Date == date {
+			return day
+		}
+	}
+	t.Fatalf("timeline day %s not found", date)
+	return CycleTimelineDay{}
 }

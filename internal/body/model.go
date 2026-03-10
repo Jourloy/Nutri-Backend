@@ -174,6 +174,37 @@ type CycleSummary struct {
 	EffectiveGoals     CycleGoals `json:"effectiveGoals"`
 }
 
+type CycleTimelineDay struct {
+	Date            string  `json:"date"`
+	Phase           string  `json:"phase"`
+	PhaseSource     string  `json:"phaseSource"`
+	PeriodStatus    string  `json:"periodStatus"`
+	IsFertileWindow bool    `json:"isFertileWindow"`
+	IsOvulationDay  bool    `json:"isOvulationDay"`
+	HasLog          bool    `json:"hasLog"`
+	FlowIntensity   *string `json:"flowIntensity,omitempty"`
+}
+
+type CycleTimelineSummary struct {
+	CycleSummary
+	Phase                  string  `json:"phase"`
+	PhaseSource            string  `json:"phaseSource"`
+	PeriodStatus           string  `json:"periodStatus"`
+	CycleDayNumber         int     `json:"cycleDayNumber"`
+	PredictedOvulationDate *string `json:"predictedOvulationDate,omitempty"`
+	FertileWindowStart     *string `json:"fertileWindowStart,omitempty"`
+	FertileWindowEnd       *string `json:"fertileWindowEnd,omitempty"`
+	DropletFillRatio       float64 `json:"dropletFillRatio"`
+	DropletState           string  `json:"dropletState"`
+	DaysUntilNextPeriod    int     `json:"daysUntilNextPeriodStart"`
+	DaysUntilPhaseChange   int     `json:"daysUntilPhaseChange"`
+}
+
+type CycleTimeline struct {
+	Summary CycleTimelineSummary `json:"summary"`
+	Days    []CycleTimelineDay   `json:"days"`
+}
+
 type PlateauEvent struct {
 	Id               int64     `json:"id" db:"id"`
 	UserId           string    `json:"-" db:"user_id"`

@@ -17,6 +17,24 @@ const (
 	defaultCycleLengthDays   = 28
 	defaultPeriodLengthDays  = 5
 	periodCaloriesMultiplier = 1.08
+	defaultOvulationOffset   = 14
+	fertileWindowLeadDays    = 5
+
+	cyclePhaseMenstrual  = "menstrual"
+	cyclePhaseFollicular = "follicular"
+	cyclePhaseOvulation  = "ovulation"
+	cyclePhaseLuteal     = "luteal"
+
+	cycleSourceRecorded  = "recorded"
+	cycleSourcePredicted = "predicted"
+
+	cyclePeriodNone      = "none"
+	cyclePeriodRecorded  = "recorded"
+	cyclePeriodPredicted = "predicted"
+
+	dropletStateFilling  = "filling"
+	dropletStateEmptying = "emptying"
+	dropletStateSteady   = "steady"
 
 	workoutWaterBonusPerMinute = 10
 	workoutWaterLimitMaxMl     = 4500
@@ -185,6 +203,7 @@ type Service interface {
 	// cycle tracking
 	GetCycleCatalog(ctx context.Context, userId string) ([]CycleCatalogCategory, error)
 	GetCycleSummary(ctx context.Context, userId string, at *time.Time) (*CycleSummary, error)
+	GetCycleTimeline(ctx context.Context, userId string, from, to, at *time.Time) (*CycleTimeline, error)
 	GetCycleDayLogs(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error)
 	UpsertCycleDay(ctx context.Context, userId string, input CycleDayUpsertInput) (*CycleDayLog, error)
 	StartCycle(ctx context.Context, userId string, at time.Time) (*CycleSummary, error)
@@ -194,6 +213,35 @@ type Service interface {
 type service struct {
 	repo Repository
 	db   *sqlx.DB
+}
+
+type cycleWindow struct {
+	Start       time.Time
+	NextStart   time.Time
+	StartSource string
+	ActualCycle *Cycle
+}
+
+type cycleDayState struct {
+	Date                time.Time
+	Phase               string
+	PhaseSource         string
+	PeriodStatus        string
+	IsFertileWindow     bool
+	IsOvulationDay      bool
+	DropletFillRatio    float64
+	DropletState        string
+	CycleDayNumber      int
+	DaysUntilNextPeriod int
+	DaysUntilPhaseShift int
+	CurrentCycleStart   time.Time
+	CurrentCycleEnd     *time.Time
+	PredictedPeriodEnd  time.Time
+	PredictedNextStart  time.Time
+	PredictedOvulation  time.Time
+	FertileWindowStart  time.Time
+	FertileWindowEnd    time.Time
+	IsRecordedPeriod    bool
 }
 
 func NewService() Service { return &service{repo: NewRepository(), db: database.Database} }
@@ -653,6 +701,128 @@ func (s *service) GetCycleSummary(ctx context.Context, userId string, at *time.T
 	return summary, nil
 }
 
+func (s *service) GetCycleTimeline(
+	ctx context.Context,
+	userId string,
+	from, to, at *time.Time,
+) (*CycleTimeline, error) {
+	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
+		return nil, err
+	}
+
+	selectedDay := time.Now()
+	if at != nil {
+		selectedDay = *at
+	}
+	selectedDay = dateOnly(selectedDay)
+
+	rangeStart := selectedDay
+	if from != nil {
+		rangeStart = dateOnly(*from)
+	}
+	rangeEnd := selectedDay
+	if to != nil {
+		rangeEnd = dateOnly(*to)
+	}
+	if from == nil && to != nil {
+		rangeStart = rangeEnd
+	}
+	if from != nil && to == nil {
+		rangeEnd = rangeStart
+	}
+	if rangeStart.After(rangeEnd) {
+		return nil, ErrCycleInputInvalid
+	}
+
+	goals, err := s.repo.GetLatestMacroGoals(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	cycles, err := s.repo.GetCycles(ctx, userId, nil, nil, 128)
+	if err != nil {
+		return nil, err
+	}
+	logs, err := s.repo.GetCycleDayLogs(ctx, userId, &rangeStart, &rangeEnd)
+	if err != nil {
+		return nil, err
+	}
+
+	cycleLen, periodLen, confidence := deriveCycleForecast(cycles)
+	today := dateOnly(time.Now())
+	logMap := make(map[string]CycleDayLog, len(logs))
+	for _, logItem := range logs {
+		logMap[logItem.LoggedAt] = logItem
+	}
+
+	days := make([]CycleTimelineDay, 0, dayDiff(rangeStart, rangeEnd)+1)
+	for day := rangeStart; !day.After(rangeEnd); day = day.AddDate(0, 0, 1) {
+		state := buildCycleDayState(day, selectedDay, today, cycles, cycleLen, periodLen)
+		logItem, hasLog := logMap[day.Format("2006-01-02")]
+		days = append(days, CycleTimelineDay{
+			Date:            day.Format("2006-01-02"),
+			Phase:           state.Phase,
+			PhaseSource:     state.PhaseSource,
+			PeriodStatus:    state.PeriodStatus,
+			IsFertileWindow: state.IsFertileWindow,
+			IsOvulationDay:  state.IsOvulationDay,
+			HasLog:          hasLog,
+			FlowIntensity:   logItem.FlowIntensity,
+		})
+	}
+
+	selectedState := buildCycleDayState(selectedDay, selectedDay, today, cycles, cycleLen, periodLen)
+	var currentCycleStart *string
+	if !selectedState.CurrentCycleStart.IsZero() {
+		value := selectedState.CurrentCycleStart.Format("2006-01-02")
+		currentCycleStart = &value
+	}
+
+	var currentCycleEnd *string
+	if selectedState.CurrentCycleEnd != nil {
+		value := selectedState.CurrentCycleEnd.Format("2006-01-02")
+		currentCycleEnd = &value
+	}
+
+	predictedPeriodEnd := selectedState.PredictedPeriodEnd.Format("2006-01-02")
+	predictedNextStart := selectedState.PredictedNextStart.Format("2006-01-02")
+	predictedOvulation := selectedState.PredictedOvulation.Format("2006-01-02")
+	fertileStart := selectedState.FertileWindowStart.Format("2006-01-02")
+	fertileEnd := selectedState.FertileWindowEnd.Format("2006-01-02")
+
+	summary := CycleTimelineSummary{
+		CycleSummary: CycleSummary{
+			Date:               selectedDay.Format("2006-01-02"),
+			IsPeriodDay:        selectedState.IsRecordedPeriod,
+			CurrentCycleStart:  currentCycleStart,
+			CurrentCycleEnd:    currentCycleEnd,
+			CycleLengthDays:    cycleLen,
+			PeriodLengthDays:   periodLen,
+			PredictedPeriodEnd: &predictedPeriodEnd,
+			PredictedNextStart: &predictedNextStart,
+			Confidence:         confidence,
+			BaseGoals:          goals,
+			EffectiveGoals:     applyPeriodGoals(goals, selectedState.IsRecordedPeriod),
+		},
+		Phase:                  selectedState.Phase,
+		PhaseSource:            selectedState.PhaseSource,
+		PeriodStatus:           selectedState.PeriodStatus,
+		CycleDayNumber:         selectedState.CycleDayNumber,
+		PredictedOvulationDate: &predictedOvulation,
+		FertileWindowStart:     &fertileStart,
+		FertileWindowEnd:       &fertileEnd,
+		DropletFillRatio:       selectedState.DropletFillRatio,
+		DropletState:           selectedState.DropletState,
+		DaysUntilNextPeriod:    selectedState.DaysUntilNextPeriod,
+		DaysUntilPhaseChange:   selectedState.DaysUntilPhaseShift,
+	}
+
+	return &CycleTimeline{
+		Summary: summary,
+		Days:    days,
+	}, nil
+}
+
 func (s *service) GetCycleDayLogs(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
 	if err := s.ensureFemaleCycleAccess(ctx, userId); err != nil {
 		return nil, err
@@ -1035,6 +1205,272 @@ func applyPeriodGoals(base CycleGoals, isPeriodDay bool) CycleGoals {
 	}
 }
 
+func buildCycleDayState(
+	day, selectedDay, today time.Time,
+	cycles []Cycle,
+	cycleLen, periodLen int,
+) cycleDayState {
+	window := resolveCycleWindow(day, selectedDay, cycles, cycleLen, periodLen)
+	cycleSpanDays := maxInt(1, dayDiff(window.Start, window.NextStart))
+	effectivePeriodLen := minInt(maxInt(periodLen, 1), cycleSpanDays)
+	forecastPeriodEnd := window.Start.AddDate(0, 0, effectivePeriodLen-1)
+
+	actualRecordedEnd := recordedCycleEnd(window.ActualCycle, today)
+	var currentCycleEnd *time.Time
+	if window.ActualCycle != nil && window.ActualCycle.EndDate != nil {
+		end := dateOnly(*window.ActualCycle.EndDate)
+		currentCycleEnd = &end
+	}
+	phasePeriodEnd := forecastPeriodEnd
+	if actualRecordedEnd != nil {
+		phasePeriodEnd = *actualRecordedEnd
+		if phasePeriodEnd.Before(window.Start) {
+			phasePeriodEnd = window.Start
+		}
+		if !phasePeriodEnd.Before(window.NextStart) {
+			phasePeriodEnd = window.NextStart.AddDate(0, 0, -1)
+		}
+	}
+
+	ovulationDate := window.NextStart.AddDate(0, 0, -defaultOvulationOffset)
+	minOvulationDate := phasePeriodEnd.AddDate(0, 0, 1)
+	maxOvulationDate := window.NextStart.AddDate(0, 0, -1)
+	if ovulationDate.Before(minOvulationDate) {
+		ovulationDate = minOvulationDate
+	}
+	if ovulationDate.After(maxOvulationDate) {
+		ovulationDate = maxOvulationDate
+	}
+
+	fertileStart := ovulationDate.AddDate(0, 0, -fertileWindowLeadDays)
+	if fertileStart.Before(phasePeriodEnd.AddDate(0, 0, 1)) {
+		fertileStart = phasePeriodEnd.AddDate(0, 0, 1)
+	}
+	fertileEnd := ovulationDate
+
+	isRecordedPeriod := false
+	if window.ActualCycle != nil {
+		recordedEnd := phasePeriodEnd
+		if window.ActualCycle.EndDate == nil && day.After(today) {
+			recordedEnd = today
+		}
+		if !recordedEnd.Before(window.Start) && !day.Before(window.Start) && !day.After(recordedEnd) {
+			isRecordedPeriod = true
+		}
+	}
+
+	isPredictedPeriod := false
+	if !isRecordedPeriod && !day.Before(window.Start) && !day.After(forecastPeriodEnd) {
+		switch {
+		case window.StartSource == cycleSourcePredicted:
+			isPredictedPeriod = true
+		case window.ActualCycle != nil && window.ActualCycle.EndDate == nil && day.After(today):
+			isPredictedPeriod = true
+		}
+	}
+
+	periodStatus := cyclePeriodNone
+	phase := cyclePhaseFollicular
+	phaseSource := cycleSourcePredicted
+
+	switch {
+	case isRecordedPeriod:
+		periodStatus = cyclePeriodRecorded
+		phase = cyclePhaseMenstrual
+		phaseSource = cycleSourceRecorded
+	case isPredictedPeriod:
+		periodStatus = cyclePeriodPredicted
+		phase = cyclePhaseMenstrual
+	case sameDay(day, ovulationDate):
+		phase = cyclePhaseOvulation
+	case day.After(ovulationDate):
+		phase = cyclePhaseLuteal
+	default:
+		phase = cyclePhaseFollicular
+	}
+
+	dropletFillRatio, dropletState := dropletStateForDay(
+		day,
+		phase,
+		window.Start,
+		phasePeriodEnd,
+		ovulationDate,
+		window.NextStart,
+	)
+
+	daysUntilPhaseChange := 0
+	switch phase {
+	case cyclePhaseMenstrual:
+		daysUntilPhaseChange = maxInt(0, dayDiff(day, phasePeriodEnd.AddDate(0, 0, 1)))
+	case cyclePhaseFollicular:
+		daysUntilPhaseChange = maxInt(0, dayDiff(day, ovulationDate))
+	case cyclePhaseOvulation:
+		daysUntilPhaseChange = 1
+	case cyclePhaseLuteal:
+		daysUntilPhaseChange = maxInt(0, dayDiff(day, window.NextStart))
+	}
+
+	return cycleDayState{
+		Date:                day,
+		Phase:               phase,
+		PhaseSource:         phaseSource,
+		PeriodStatus:        periodStatus,
+		IsFertileWindow:     !day.Before(fertileStart) && !day.After(fertileEnd),
+		IsOvulationDay:      sameDay(day, ovulationDate),
+		DropletFillRatio:    dropletFillRatio,
+		DropletState:        dropletState,
+		CycleDayNumber:      maxInt(1, dayDiff(window.Start, day)+1),
+		DaysUntilNextPeriod: maxInt(0, dayDiff(day, window.NextStart)),
+		DaysUntilPhaseShift: daysUntilPhaseChange,
+		CurrentCycleStart:   window.Start,
+		CurrentCycleEnd:     currentCycleEnd,
+		PredictedPeriodEnd:  forecastPeriodEnd,
+		PredictedNextStart:  window.NextStart,
+		PredictedOvulation:  ovulationDate,
+		FertileWindowStart:  fertileStart,
+		FertileWindowEnd:    fertileEnd,
+		IsRecordedPeriod:    isRecordedPeriod,
+	}
+}
+
+func resolveCycleWindow(
+	day, selectedDay time.Time,
+	cycles []Cycle,
+	cycleLen, periodLen int,
+) cycleWindow {
+	actualStarts := make([]time.Time, 0, len(cycles))
+	cycleByStart := make(map[string]Cycle, len(cycles))
+	for _, cycle := range cycles {
+		start := dateOnly(cycle.StartDate)
+		key := start.Format("2006-01-02")
+		if _, exists := cycleByStart[key]; !exists {
+			cycleByStart[key] = cycle
+			actualStarts = append(actualStarts, start)
+		}
+	}
+	sort.Slice(actualStarts, func(i, j int) bool {
+		return actualStarts[i].Before(actualStarts[j])
+	})
+
+	fallbackStart := dateOnly(selectedDay).AddDate(0, 0, -maxInt(periodLen, 1))
+	if len(actualStarts) == 0 {
+		currentStart := fallbackStart
+		nextStart := currentStart.AddDate(0, 0, cycleLen)
+		for day.Before(currentStart) {
+			nextStart = currentStart
+			currentStart = currentStart.AddDate(0, 0, -cycleLen)
+		}
+		for !day.Before(nextStart) {
+			currentStart = nextStart
+			nextStart = currentStart.AddDate(0, 0, cycleLen)
+		}
+		return cycleWindow{
+			Start:       currentStart,
+			NextStart:   nextStart,
+			StartSource: cycleSourcePredicted,
+		}
+	}
+
+	index := sort.Search(len(actualStarts), func(i int) bool {
+		return !actualStarts[i].Before(day)
+	})
+
+	if index == 0 && day.Before(actualStarts[0]) {
+		nextStart := actualStarts[0]
+		currentStart := nextStart.AddDate(0, 0, -cycleLen)
+		for day.Before(currentStart) {
+			nextStart = currentStart
+			currentStart = currentStart.AddDate(0, 0, -cycleLen)
+		}
+		return cycleWindow{
+			Start:       currentStart,
+			NextStart:   nextStart,
+			StartSource: cycleSourcePredicted,
+		}
+	}
+
+	currentStart := actualStarts[maxInt(index-1, 0)]
+	currentSource := cycleSourceRecorded
+	nextStart := currentStart.AddDate(0, 0, cycleLen)
+	if index < len(actualStarts) && actualStarts[index].After(currentStart) {
+		nextStart = actualStarts[index]
+	}
+	if index < len(actualStarts) && sameDay(actualStarts[index], day) {
+		currentStart = actualStarts[index]
+		currentSource = cycleSourceRecorded
+		if index+1 < len(actualStarts) {
+			nextStart = actualStarts[index+1]
+		} else {
+			nextStart = currentStart.AddDate(0, 0, cycleLen)
+		}
+	}
+	for !day.Before(nextStart) {
+		currentStart = nextStart
+		nextStart = currentStart.AddDate(0, 0, cycleLen)
+		currentSource = cycleSourcePredicted
+	}
+
+	var actualCycle *Cycle
+	if currentSource == cycleSourceRecorded {
+		if cycle, ok := cycleByStart[currentStart.Format("2006-01-02")]; ok {
+			copyCycle := cycle
+			actualCycle = &copyCycle
+		}
+	}
+
+	return cycleWindow{
+		Start:       currentStart,
+		NextStart:   nextStart,
+		StartSource: currentSource,
+		ActualCycle: actualCycle,
+	}
+}
+
+func recordedCycleEnd(cycle *Cycle, today time.Time) *time.Time {
+	if cycle == nil {
+		return nil
+	}
+	start := dateOnly(cycle.StartDate)
+	if cycle.EndDate != nil {
+		end := dateOnly(*cycle.EndDate)
+		if end.Before(start) {
+			end = start
+		}
+		return &end
+	}
+	if today.Before(start) {
+		return nil
+	}
+	end := today
+	return &end
+}
+
+func dropletStateForDay(
+	day time.Time,
+	phase string,
+	periodStart, periodEnd, ovulationDate, nextStart time.Time,
+) (float64, string) {
+	switch phase {
+	case cyclePhaseMenstrual:
+		totalSteps := maxInt(1, dayDiff(periodStart, periodEnd))
+		progress := clampFloat64(float64(dayDiff(periodStart, day))/float64(totalSteps), 0, 1)
+		return clampFloat64(1.0-progress*(1.0-0.08), 0.08, 1.0), dropletStateEmptying
+	case cyclePhaseLuteal:
+		lutealStart := ovulationDate.AddDate(0, 0, 1)
+		lutealEnd := nextStart.AddDate(0, 0, -1)
+		totalSteps := dayDiff(lutealStart, lutealEnd)
+		if totalSteps <= 0 {
+			return 1.0, dropletStateFilling
+		}
+		progress := clampFloat64(float64(dayDiff(lutealStart, day))/float64(totalSteps), 0, 1)
+		return clampFloat64(0.18+progress*(1.0-0.18), 0.18, 1.0), dropletStateFilling
+	case cyclePhaseOvulation:
+		return 0.18, dropletStateSteady
+	default:
+		return 0.08, dropletStateSteady
+	}
+}
+
 func effectiveCaloriesTarget(baseCalories float64) float64 {
 	if baseCalories <= 0 {
 		return baseCalories
@@ -1071,6 +1507,38 @@ func medianInt(values []int) int {
 }
 
 func clampInt(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func minInt(value, other int) int {
+	if value < other {
+		return value
+	}
+	return other
+}
+
+func maxInt(value, other int) int {
+	if value > other {
+		return value
+	}
+	return other
+}
+
+func dayDiff(start, end time.Time) int {
+	return int(dateOnly(end).Sub(dateOnly(start)).Hours() / 24)
+}
+
+func sameDay(left, right time.Time) bool {
+	return dateOnly(left).Equal(dateOnly(right))
+}
+
+func clampFloat64(value, minValue, maxValue float64) float64 {
 	if value < minValue {
 		return minValue
 	}

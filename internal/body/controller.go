@@ -61,6 +61,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		// cycle
 		r.Get("/cycle/catalog", c.GetCycleCatalog)
 		r.Get("/cycle/summary", c.GetCycleSummary)
+		r.Get("/cycle/timeline", c.GetCycleTimeline)
 		r.Get("/cycle/day", c.GetCycleDayLogs)
 		r.Put("/cycle/day", c.UpsertCycleDay)
 		r.Post("/cycle/start", c.StartCycle)
@@ -93,6 +94,7 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║    GET /workout/daily?date=")
 	logger.Info("║    GET /cycle/catalog")
 	logger.Info("║    GET /cycle/summary?date=")
+	logger.Info("║    GET /cycle/timeline?from=&to=&date=")
 	logger.Info("║    GET /cycle/day?from=&to=")
 	logger.Info("║    PUT /cycle/day")
 	logger.Info("║   POST /cycle/start")
@@ -769,6 +771,52 @@ func (c *Controller) GetCycleSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := c.service.GetCycleSummary(context.Background(), u.Id, date)
+	if err != nil {
+		c.writeCycleError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func (c *Controller) GetCycleTimeline(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var from *time.Time
+	if fromRaw := r.URL.Query().Get("from"); fromRaw != "" {
+		parsed, err := parseDate(fromRaw)
+		if err != nil {
+			http.Error(w, "invalid from format, expected YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		from = &parsed
+	}
+
+	var to *time.Time
+	if toRaw := r.URL.Query().Get("to"); toRaw != "" {
+		parsed, err := parseDate(toRaw)
+		if err != nil {
+			http.Error(w, "invalid to format, expected YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		to = &parsed
+	}
+
+	var date *time.Time
+	if dateRaw := r.URL.Query().Get("date"); dateRaw != "" {
+		parsed, err := parseDate(dateRaw)
+		if err != nil {
+			http.Error(w, "invalid date format, expected YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		date = &parsed
+	}
+
+	res, err := c.service.GetCycleTimeline(context.Background(), u.Id, from, to, date)
 	if err != nil {
 		c.writeCycleError(w, err)
 		return
