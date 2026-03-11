@@ -954,8 +954,9 @@ func (s *service) SeedCycle(ctx context.Context, userId string, input CycleSeedI
 		return nil, err
 	}
 	_, periodLen, _ := deriveCycleForecast(cycles)
-	startDate := when.AddDate(0, 0, -(maxInt(periodLen, 1) - 1))
-	if _, err := s.repo.CreateHistoricalCycle(ctx, userId, startDate, when); err != nil {
+	endDate := when.AddDate(0, 0, -1)
+	startDate := endDate.AddDate(0, 0, -(maxInt(periodLen, 1) - 1))
+	if _, err := s.repo.CreateHistoricalCycle(ctx, userId, startDate, endDate); err != nil {
 		return nil, err
 	}
 	return s.GetCycleSummary(ctx, userId, &when)
@@ -979,11 +980,12 @@ func (s *service) StopCycle(ctx context.Context, userId string, at time.Time) (*
 	if openCycle == nil {
 		return nil, ErrCycleNoActive
 	}
-	if when.Before(dateOnly(openCycle.StartDate)) {
+	startDate := dateOnly(openCycle.StartDate)
+	if !when.After(startDate) {
 		return nil, ErrCycleDateInvalid
 	}
 
-	if _, err := s.repo.StopCycle(ctx, userId, when); err != nil {
+	if _, err := s.repo.StopCycle(ctx, userId, when.AddDate(0, 0, -1)); err != nil {
 		return nil, err
 	}
 	return s.GetCycleSummary(ctx, userId, &when)

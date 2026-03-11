@@ -612,6 +612,74 @@ func TestStopCycle_NoActiveCycle(t *testing.T) {
 	}
 }
 
+func TestStopCycle_RejectsFirstPeriodDay(t *testing.T) {
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getOpenCycleFn: func(ctx context.Context, userId string) (*Cycle, error) {
+				return &Cycle{StartDate: mustDate(t, "2026-03-10")}, nil
+			},
+		},
+	}
+
+	_, err := svc.StopCycle(context.Background(), "u1", mustDate(t, "2026-03-10"))
+	if !errors.Is(err, ErrCycleDateInvalid) {
+		t.Fatalf("expected ErrCycleDateInvalid, got %v", err)
+	}
+}
+
+func TestStopCycle_PersistsPreviousDayAndReturnsPostPeriod(t *testing.T) {
+	var (
+		storedEnd time.Time
+		cycles    []Cycle
+		openCycle = &Cycle{StartDate: mustDate(t, "2026-03-06")}
+	)
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getPeriodDaysFn: func(ctx context.Context, userId string, from, to time.Time) (map[string]bool, error) {
+				return map[string]bool{}, nil
+			},
+			getOpenCycleFn: func(ctx context.Context, userId string) (*Cycle, error) {
+				return openCycle, nil
+			},
+			stopCycleFn: func(ctx context.Context, userId string, endDate time.Time) (*Cycle, error) {
+				storedEnd = endDate
+				openCycle = nil
+				cycle := Cycle{StartDate: mustDate(t, "2026-03-06"), EndDate: &endDate}
+				cycles = []Cycle{cycle}
+				return &cycle, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return cycles, nil
+			},
+		},
+	}
+
+	summary, err := svc.StopCycle(context.Background(), "u1", mustDate(t, "2026-03-10"))
+	if err != nil {
+		t.Fatalf("StopCycle returned error: %v", err)
+	}
+
+	if storedEnd.Format("2006-01-02") != "2026-03-09" {
+		t.Fatalf("expected persisted end date 2026-03-09, got %s", storedEnd.Format("2006-01-02"))
+	}
+	if summary.Date != "2026-03-10" {
+		t.Fatalf("expected summary date 2026-03-10, got %s", summary.Date)
+	}
+	if summary.IsPeriodDay {
+		t.Fatalf("expected first non-period day to be post-period")
+	}
+}
+
 func TestSeedCycle_StartedCreatesOpenCycle(t *testing.T) {
 	var cycles []Cycle
 	var openCycle *Cycle
@@ -698,14 +766,60 @@ func TestSeedCycle_EndedBackfillsClosedCycle(t *testing.T) {
 	if created == nil {
 		t.Fatalf("expected historical cycle to be created")
 	}
-	if created.StartDate.Format("2006-01-02") != "2026-02-14" {
-		t.Fatalf("expected inferred start 2026-02-14, got %s", created.StartDate.Format("2006-01-02"))
+	if created.StartDate.Format("2006-01-02") != "2026-02-13" {
+		t.Fatalf("expected inferred start 2026-02-13, got %s", created.StartDate.Format("2006-01-02"))
 	}
-	if created.EndDate == nil || created.EndDate.Format("2006-01-02") != "2026-02-18" {
+	if created.EndDate == nil || created.EndDate.Format("2006-01-02") != "2026-02-17" {
 		t.Fatalf("unexpected end date: %v", created.EndDate)
 	}
-	if summary.CurrentCycleEnd == nil || *summary.CurrentCycleEnd != "2026-02-18" {
-		t.Fatalf("unexpected currentCycleEnd: %v", summary.CurrentCycleEnd)
+	if summary.IsPeriodDay {
+		t.Fatalf("expected seed end day to be treated as post-period")
+	}
+}
+
+func TestGetCycleTimeline_StopDayIsPostPeriodAndLowDroplet(t *testing.T) {
+	cycles := []Cycle{
+		{StartDate: mustDate(t, "2026-03-06"), EndDate: ptrDate(mustDate(t, "2026-03-09"))},
+		{StartDate: mustDate(t, "2026-02-08"), EndDate: ptrDate(mustDate(t, "2026-02-12"))},
+		{StartDate: mustDate(t, "2026-01-11"), EndDate: ptrDate(mustDate(t, "2026-01-15"))},
+	}
+
+	svc := &service{
+		repo: stubRepo{
+			getLatestGenderFn: func(ctx context.Context, userId string) (string, error) {
+				return "female", nil
+			},
+			getLatestMacroGoalsFn: func(ctx context.Context, userId string) (CycleGoals, error) {
+				return CycleGoals{Calories: 1800, Protein: 120, Fat: 60, Carbs: 180}, nil
+			},
+			getCyclesFn: func(ctx context.Context, userId string, from, to *time.Time, limit int) ([]Cycle, error) {
+				return cycles, nil
+			},
+			getCycleDayLogsFn: func(ctx context.Context, userId string, from, to *time.Time) ([]CycleDayLog, error) {
+				return nil, nil
+			},
+		},
+	}
+
+	from := mustDate(t, "2026-03-09")
+	to := mustDate(t, "2026-03-12")
+	at := mustDate(t, "2026-03-10")
+	timeline, err := svc.GetCycleTimeline(context.Background(), "u1", &from, &to, &at)
+	if err != nil {
+		t.Fatalf("GetCycleTimeline returned error: %v", err)
+	}
+
+	if timeline.Summary.Phase != cyclePhaseFollicular {
+		t.Fatalf("expected follicular phase on first non-period day, got %s", timeline.Summary.Phase)
+	}
+	if timeline.Summary.PeriodStatus != cyclePeriodNone {
+		t.Fatalf("expected no period status on first non-period day, got %s", timeline.Summary.PeriodStatus)
+	}
+	if timeline.Summary.CurrentCycleEnd == nil || *timeline.Summary.CurrentCycleEnd != "2026-03-09" {
+		t.Fatalf("unexpected current cycle end: %v", timeline.Summary.CurrentCycleEnd)
+	}
+	if timeline.Summary.DropletFillRatio != 0.08 {
+		t.Fatalf("expected low droplet fill 0.08 after stop day, got %.2f", timeline.Summary.DropletFillRatio)
 	}
 }
 
