@@ -34,7 +34,7 @@ type Controller struct {
 
 func NewController() (*Controller, error) {
 	aiRepo := ai.NewRepository()
-	aiSvc, err := ai.NewService(aiRepo)
+	aiSvc, err := ai.NewServiceFromConfig(aiRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +269,7 @@ func (c *Controller) GetProductsTodayCount(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := map[string]interface{}{
-		"count":      len(products),
+		"count":       len(products),
 		"hasProducts": len(products) > 0,
 	}
 

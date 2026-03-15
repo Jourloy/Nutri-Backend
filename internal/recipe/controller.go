@@ -26,7 +26,7 @@ type Controller struct {
 }
 
 func NewController() (*Controller, error) {
-	svc, err := NewService()
+	svc, err := NewServiceFromConfig()
 	if err != nil {
 		return nil, err
 	}

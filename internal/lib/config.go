@@ -31,11 +31,12 @@ type conf struct {
 	AIProvider       string // AI provider to use (perplexity, openai, auto)
 	PerplexityAPIKey string
 	OpenAIAPIKey     string
-	MinioEndpoint    string
-	MinioAccessKey   string
-	MinioSecretKey   string
-	MinioBucketName  string
-	MinioUseSSL      bool
+	S3Endpoint       string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3BucketName     string
+	S3UseSSL         bool
+	S3Region         string
 	// Service-to-service auth
 	ServiceToken string // Token for internal service communication (Telegram bot, etc.)
 }
@@ -194,42 +195,49 @@ func ParseENV() error {
 		return errors.New("cannot find env OPENAI_API_KEY")
 	}
 
-	if env, exist := os.LookupEnv("MINIO_ENDPOINT"); exist {
-		Config.MinioEndpoint = env
+	if env, exist := os.LookupEnv("S3_ENDPOINT"); exist {
+		Config.S3Endpoint = env
 	} else {
-		logger.Error("cannot find env MINIO_ENDPOINT")
-		return errors.New("cannot find env MINIO_ENDPOINT")
+		logger.Error("cannot find env S3_ENDPOINT")
+		return errors.New("cannot find env S3_ENDPOINT")
 	}
 
-	if env, exist := os.LookupEnv("MINIO_ACCESS_KEY"); exist {
-		Config.MinioAccessKey = env
+	if env, exist := os.LookupEnv("S3_ACCESS_KEY"); exist {
+		Config.S3AccessKey = env
 	} else {
-		logger.Error("cannot find env MINIO_ACCESS_KEY")
-		return errors.New("cannot find env MINIO_ACCESS_KEY")
+		logger.Error("cannot find env S3_ACCESS_KEY")
+		return errors.New("cannot find env S3_ACCESS_KEY")
 	}
 
-	if env, exist := os.LookupEnv("MINIO_SECRET_KEY"); exist {
-		Config.MinioSecretKey = env
+	if env, exist := os.LookupEnv("S3_SECRET_KEY"); exist {
+		Config.S3SecretKey = env
 	} else {
-		logger.Error("cannot find env MINIO_SECRET_KEY")
-		return errors.New("cannot find env MINIO_SECRET_KEY")
+		logger.Error("cannot find env S3_SECRET_KEY")
+		return errors.New("cannot find env S3_SECRET_KEY")
 	}
 
-	if env, exist := os.LookupEnv("MINIO_BUCKET_NAME"); exist {
-		Config.MinioBucketName = env
+	if env, exist := os.LookupEnv("S3_BUCKET_NAME"); exist {
+		Config.S3BucketName = env
 	} else {
-		Config.MinioBucketName = "nutri-ai-images" // Default bucket name
+		logger.Error("cannot find env S3_BUCKET_NAME")
+		return errors.New("cannot find env S3_BUCKET_NAME")
 	}
 
-	if env, exist := os.LookupEnv("MINIO_USE_SSL"); exist {
+	if env, exist := os.LookupEnv("S3_USE_SSL"); exist {
 		val, err := strconv.ParseBool(env)
 		if err != nil {
-			logger.Error("cannot parse env MINIO_USE_SSL", "error", err)
-			return errors.New("cannot parse env MINIO_USE_SSL")
+			logger.Error("cannot parse env S3_USE_SSL", "error", err)
+			return errors.New("cannot parse env S3_USE_SSL")
 		}
-		Config.MinioUseSSL = val
+		Config.S3UseSSL = val
 	} else {
-		Config.MinioUseSSL = true // Default to true for security
+		Config.S3UseSSL = true
+	}
+
+	if env, exist := os.LookupEnv("S3_REGION"); exist {
+		Config.S3Region = env
+	} else {
+		Config.S3Region = "us-east-1"
 	}
 
 	// Service token for internal communication (optional, but required for /internal endpoints)

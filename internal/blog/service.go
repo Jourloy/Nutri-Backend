@@ -13,17 +13,13 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	htmlrenderer "github.com/yuin/goldmark/renderer/html"
 
 	"github.com/jourloy/nutri-backend/internal/ai"
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/nutri-backend/internal/storage"
 )
-
-const blogBucketName = "nutri-blog-images"
 
 const (
 	maxPrepareTitleLength       = 220
@@ -82,7 +78,7 @@ type Service interface {
 
 type service struct {
 	repo             Repository
-	minioClient      *minio.Client
+	storage          storage.Service
 	logger           *log.Logger
 	aiProvider       ai.AIProvider
 	aiProviderName   string
@@ -90,48 +86,13 @@ type service struct {
 	fallbackName     string
 }
 
-func NewService(repo Repository) (Service, error) {
+func NewService(repo Repository, storageService storage.Service) (Service, error) {
 	logger := log.NewWithOptions(os.Stderr, log.Options{
 		Prefix: "[blog-svc]",
 		Level:  log.DebugLevel,
 	})
-
-	// Parse Minio endpoint
-	endpoint := lib.Config.MinioEndpoint
-	useSSL := lib.Config.MinioUseSSL
-
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		parsedURL, err := url.Parse(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse minio endpoint: %w", err)
-		}
-		endpoint = parsedURL.Host
-		useSSL = parsedURL.Scheme == "https"
-	}
-
-	// Initialize Minio client
-	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(lib.Config.MinioAccessKey, lib.Config.MinioSecretKey, ""),
-		Secure: useSSL,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize minio client: %w", err)
-	}
-
-	// Ensure bucket exists
-	err = minioClient.MakeBucket(context.Background(), blogBucketName, minio.MakeBucketOptions{})
-	if err != nil {
-		exists, errBucketExists := minioClient.BucketExists(context.Background(), blogBucketName)
-		if errBucketExists != nil {
-			logger.Warn("failed to check bucket existence", "bucket", blogBucketName, "error", errBucketExists)
-		}
-		if !exists {
-			logger.Warn("bucket does not exist and could not be created", "bucket", blogBucketName, "error", err)
-		} else {
-			logger.Debug("bucket already exists", "bucket", blogBucketName)
-		}
-	} else {
-		logger.Info("bucket created successfully", "bucket", blogBucketName)
+	if storageService == nil {
+		return nil, fmt.Errorf("storage service is required")
 	}
 
 	articleProvider, err := ai.GetProvider(logger)
@@ -160,13 +121,21 @@ func NewService(repo Repository) (Service, error) {
 
 	return &service{
 		repo:             repo,
-		minioClient:      minioClient,
+		storage:          storageService,
 		logger:           logger,
 		aiProvider:       articleProvider,
 		aiProviderName:   articleProviderName,
 		fallbackProvider: fallbackProvider,
 		fallbackName:     fallbackName,
 	}, nil
+}
+
+func NewServiceFromConfig(repo Repository) (Service, error) {
+	storageService, err := storage.NewS3ServiceFromConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage service: %w", err)
+	}
+	return NewService(repo, storageService)
 }
 
 // ===== Categories =====
@@ -503,28 +472,12 @@ func (s *service) UploadImage(ctx context.Context, imageData []byte, filename st
 		contentType = "image/webp"
 	}
 
-	// Upload to MinIO
-	_, err := s.minioClient.PutObject(ctx, blogBucketName, objectName, bytes.NewReader(imageData), int64(len(imageData)), minio.PutObjectOptions{
-		ContentType: contentType,
-	})
+	imageURL, err := s.storage.Upload(ctx, storage.FolderBlog, objectName, imageData, contentType)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload image: %w", err)
 	}
 
-	// Generate public URL
-	// If using public bucket, construct direct URL
-	endpoint := lib.Config.MinioEndpoint
-	if !strings.HasPrefix(endpoint, "http") {
-		if lib.Config.MinioUseSSL {
-			endpoint = "https://" + endpoint
-		} else {
-			endpoint = "http://" + endpoint
-		}
-	}
-
-	imageUrl := fmt.Sprintf("%s/%s/%s", endpoint, blogBucketName, objectName)
-
-	return imageUrl, nil
+	return imageURL, nil
 }
 
 // ===== Helpers =====

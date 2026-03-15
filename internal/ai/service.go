@@ -8,18 +8,15 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/nfnt/resize"
 
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/nutri-backend/internal/storage"
 )
 
 type Service interface {
@@ -37,7 +34,7 @@ type service struct {
 	aiProviderName   string
 	fallbackProvider AIProvider
 	fallbackName     string
-	minioClient      *minio.Client
+	storage          storage.Service
 	logger           *log.Logger
 }
 
@@ -52,7 +49,7 @@ func providerNameFromInstance(p AIProvider) string {
 	}
 }
 
-func NewService(repo Repository) (Service, error) {
+func NewService(repo Repository, storageService storage.Service) (Service, error) {
 	// Initialize logger first
 	logger := log.NewWithOptions(os.Stderr, log.Options{
 		Prefix: "[ai-svc]",
@@ -76,46 +73,8 @@ func NewService(repo Repository) (Service, error) {
 	}
 	fallbackName := providerNameFromInstance(fallbackProvider)
 
-	// Parse Minio endpoint to extract hostname and determine SSL
-	endpoint := lib.Config.MinioEndpoint
-	useSSL := lib.Config.MinioUseSSL
-
-	// If endpoint contains protocol, parse it
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		parsedURL, err := url.Parse(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse minio endpoint: %w", err)
-		}
-		endpoint = parsedURL.Host
-		useSSL = parsedURL.Scheme == "https"
-	}
-
-	// Initialize Minio client
-	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(lib.Config.MinioAccessKey, lib.Config.MinioSecretKey, ""),
-		Secure: useSSL,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize minio client: %w", err)
-	}
-
-	// Ensure bucket exists - try to create it, ignore if already exists
-	bucketName := lib.Config.MinioBucketName
-	err = minioClient.MakeBucket(context.Background(), bucketName, minio.MakeBucketOptions{})
-	if err != nil {
-		// Check if bucket already exists
-		exists, errBucketExists := minioClient.BucketExists(context.Background(), bucketName)
-		if errBucketExists != nil {
-			logger.Warn("failed to check bucket existence", "bucket", bucketName, "error", errBucketExists)
-		}
-		if !exists {
-			logger.Warn("bucket does not exist and could not be created - please create it manually", "bucket", bucketName, "error", err)
-			logger.Info("AI service will continue, but image uploads will fail until bucket is created")
-		} else {
-			logger.Debug("bucket already exists", "bucket", bucketName)
-		}
-	} else {
-		logger.Info("bucket created successfully", "bucket", bucketName)
+	if storageService == nil {
+		return nil, fmt.Errorf("storage service is required")
 	}
 
 	return &service{
@@ -124,9 +83,17 @@ func NewService(repo Repository) (Service, error) {
 		aiProviderName:   aiProviderName,
 		fallbackProvider: fallbackProvider,
 		fallbackName:     fallbackName,
-		minioClient:      minioClient,
+		storage:          storageService,
 		logger:           logger,
 	}, nil
+}
+
+func NewServiceFromConfig(repo Repository) (Service, error) {
+	storageService, err := storage.NewS3ServiceFromConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage service: %w", err)
+	}
+	return NewService(repo, storageService)
 }
 
 // AnalyzeFoodImage performs AI analysis of food image with full workflow
@@ -174,7 +141,7 @@ func (s *service) AnalyzeFoodImage(ctx context.Context, userId string, imageData
 		return nil, fmt.Errorf("failed to create analysis log: %w", err)
 	}
 
-	// 4. Process and upload image to Minio
+	// 4. Process and upload image to S3
 	imageUrl, imageBase64, err := s.processAndUploadImage(ctx, userId, imageData)
 	if err != nil {
 		s.updateLogWithError(ctx, createdLog.Id, "failed to upload image", err)
@@ -548,8 +515,8 @@ func (s *service) GenerateRecipeDraft(
 	return draft, nil
 }
 
-// processAndUploadImage processes image (resize, compress) and uploads to Minio
-// Returns: presigned URL for storage, base64 encoded image for AI providers
+// processAndUploadImage processes image (resize, compress) and uploads to S3.
+// Returns: public URL for storage, base64 encoded image for AI providers
 func (s *service) processAndUploadImage(ctx context.Context, userId string, imageData []byte) (string, string, error) {
 	// Decode original image
 	img, _, err := image.Decode(bytes.NewReader(imageData))
@@ -573,28 +540,12 @@ func (s *service) processAndUploadImage(ctx context.Context, userId string, imag
 	// Generate unique filename
 	filename := fmt.Sprintf("%s/%s_%d.jpg", userId, uuid.New().String(), time.Now().Unix())
 
-	// Upload to Minio
-	_, err = s.minioClient.PutObject(
-		ctx,
-		lib.Config.MinioBucketName,
-		filename,
-		bytes.NewReader(buf.Bytes()),
-		int64(buf.Len()),
-		minio.PutObjectOptions{
-			ContentType: "image/jpeg",
-		},
-	)
+	imageURL, err := s.storage.Upload(ctx, storage.FolderAI, filename, buf.Bytes(), "image/jpeg")
 	if err != nil {
-		return "", "", fmt.Errorf("failed to upload to minio: %w", err)
+		return "", "", fmt.Errorf("failed to upload to s3: %w", err)
 	}
 
-	// Generate presigned URL (valid for 7 days for moderation review)
-	presignedURL, err := s.minioClient.PresignedGetObject(ctx, lib.Config.MinioBucketName, filename, 7*24*time.Hour, nil)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to generate presigned url: %w", err)
-	}
-
-	return presignedURL.String(), imageBase64, nil
+	return imageURL, imageBase64, nil
 }
 
 // callOpenAIVision calls OpenAI Vision API

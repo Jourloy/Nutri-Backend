@@ -1,11 +1,9 @@
 package recipe
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -13,16 +11,13 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"github.com/jourloy/nutri-backend/internal/ai"
 	"github.com/jourloy/nutri-backend/internal/fit"
 	"github.com/jourloy/nutri-backend/internal/lib"
 	"github.com/jourloy/nutri-backend/internal/product"
+	"github.com/jourloy/nutri-backend/internal/storage"
 )
-
-const recipeBucketName = "nutri-recipe-images"
 
 type Service interface {
 	// Books
@@ -87,73 +82,25 @@ type service struct {
 	productService product.Service
 	fitService     fit.Service
 	aiService      ai.Service
-	minioClient    *minio.Client
+	storage        storage.Service
 	logger         *log.Logger
 }
 
-func NewService() (Service, error) {
+func NewService(storageService storage.Service) (Service, error) {
 	logger := log.NewWithOptions(os.Stderr, log.Options{
 		Prefix: "[recipe-svc]",
 		Level:  log.DebugLevel,
 	})
 
 	repo := NewRepository()
-
-	// Parse Minio endpoint
-	endpoint := lib.Config.MinioEndpoint
-	useSSL := lib.Config.MinioUseSSL
-
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		parsedURL, err := url.Parse(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse minio endpoint: %w", err)
-		}
-		endpoint = parsedURL.Host
-		useSSL = parsedURL.Scheme == "https"
-	}
-
-	// Initialize Minio client
-	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(lib.Config.MinioAccessKey, lib.Config.MinioSecretKey, ""),
-		Secure: useSSL,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize minio client: %w", err)
-	}
-
-	// Ensure bucket exists
-	err = minioClient.MakeBucket(context.Background(), recipeBucketName, minio.MakeBucketOptions{})
-	if err != nil {
-		exists, errBucketExists := minioClient.BucketExists(context.Background(), recipeBucketName)
-		if errBucketExists != nil {
-			logger.Warn("failed to check bucket existence", "bucket", recipeBucketName, "error", errBucketExists)
-		}
-		if !exists {
-			logger.Warn("bucket does not exist and could not be created", "bucket", recipeBucketName, "error", err)
-		}
-	}
-
-	// Set public read policy for the bucket
-	policy := fmt.Sprintf(`{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Effect": "Allow",
-				"Principal": {"AWS": ["*"]},
-				"Action": ["s3:GetObject"],
-				"Resource": ["arn:aws:s3:::%s/*"]
-			}
-		]
-	}`, recipeBucketName)
-	err = minioClient.SetBucketPolicy(context.Background(), recipeBucketName, policy)
-	if err != nil {
-		logger.Warn("failed to set bucket policy", "bucket", recipeBucketName, "error", err)
+	if storageService == nil {
+		return nil, fmt.Errorf("storage service is required")
 	}
 
 	// Initialize AI service (optional - may fail if API keys not configured)
 	var aiSvc ai.Service
 	aiRepo := ai.NewRepository()
-	aiSvc, err = ai.NewService(aiRepo)
+	aiSvc, err := ai.NewServiceFromConfig(aiRepo)
 	if err != nil {
 		logger.Warn("AI service not available for nutrition calculation", "error", err)
 	}
@@ -163,9 +110,17 @@ func NewService() (Service, error) {
 		productService: product.NewService(),
 		fitService:     fit.NewService(),
 		aiService:      aiSvc,
-		minioClient:    minioClient,
+		storage:        storageService,
 		logger:         logger,
 	}, nil
+}
+
+func NewServiceFromConfig() (Service, error) {
+	storageService, err := storage.NewS3ServiceFromConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage service: %w", err)
+	}
+	return NewService(storageService)
 }
 
 // ===== Books =====
@@ -945,27 +900,12 @@ func (s *service) UploadImage(ctx context.Context, imageData []byte, filename st
 		contentType = "image/webp"
 	}
 
-	// Upload to MinIO
-	_, err := s.minioClient.PutObject(ctx, recipeBucketName, objectName, bytes.NewReader(imageData), int64(len(imageData)), minio.PutObjectOptions{
-		ContentType: contentType,
-	})
+	imageURL, err := s.storage.Upload(ctx, storage.FolderRecipe, objectName, imageData, contentType)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload image: %w", err)
 	}
 
-	// Generate public URL
-	endpoint := lib.Config.MinioEndpoint
-	if !strings.HasPrefix(endpoint, "http") {
-		if lib.Config.MinioUseSSL {
-			endpoint = "https://" + endpoint
-		} else {
-			endpoint = "http://" + endpoint
-		}
-	}
-
-	imageUrl := fmt.Sprintf("%s/%s/%s", endpoint, recipeBucketName, objectName)
-
-	return imageUrl, nil
+	return imageURL, nil
 }
 
 // ===== AI Nutrition Calculation =====

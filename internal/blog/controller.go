@@ -29,7 +29,7 @@ type Controller struct {
 
 func NewController() (*Controller, error) {
 	repo := NewRepository()
-	svc, err := NewService(repo)
+	svc, err := NewServiceFromConfig(repo)
 	if err != nil {
 		return nil, err
 	}
