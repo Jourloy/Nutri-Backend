@@ -94,6 +94,48 @@ func TestBuildPublicURL(t *testing.T) {
 	}
 }
 
+func TestResolvePublicBaseURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		endpoint      string
+		publicBaseURL string
+		useSSL        bool
+		want          string
+	}{
+		{
+			name:          "uses explicit public base url",
+			endpoint:      "http://internal.example.com:9000",
+			publicBaseURL: "https://cdn.example.com/storage",
+			useSSL:        false,
+			want:          "https://cdn.example.com/storage",
+		},
+		{
+			name:          "falls back to endpoint when public base url missing",
+			endpoint:      "minio.example.com",
+			publicBaseURL: "",
+			useSSL:        true,
+			want:          "https://minio.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := resolvePublicBaseURL(tt.endpoint, tt.publicBaseURL, tt.useSSL)
+			if err != nil {
+				t.Fatalf("resolvePublicBaseURL() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolvePublicBaseURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEnsureFolderCreatesMarkerOnlyOnce(t *testing.T) {
 	t.Parallel()
 

@@ -20,6 +20,14 @@ type queryExecutor interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
+type urlRewriter interface {
+	RewriteURL(raw string) (string, bool)
+}
+
+type textRewriter interface {
+	RewriteText(raw string) (string, bool)
+}
+
 type stringRow struct {
 	ID    int64          `db:"id"`
 	Value sql.NullString `db:"value"`
@@ -45,16 +53,15 @@ func main() {
 	legacyEndpoint := flag.String("legacy-endpoint", os.Getenv("LEGACY_S3_ENDPOINT"), "Legacy S3 endpoint")
 	legacyUseSSL := flag.Bool("legacy-use-ssl", boolEnv("LEGACY_S3_USE_SSL", false), "Use https for the legacy endpoint when scheme is omitted")
 	targetEndpoint := flag.String("s3-endpoint", os.Getenv("S3_ENDPOINT"), "Target S3 endpoint")
+	targetPublicBaseURL := flag.String("s3-public-base-url", os.Getenv("S3_PUBLIC_BASE_URL"), "Public base URL for direct S3 links")
 	targetBucket := flag.String("s3-bucket-name", os.Getenv("S3_BUCKET_NAME"), "Target S3 bucket name")
 	targetUseSSL := flag.Bool("s3-use-ssl", boolEnv("S3_USE_SSL", true), "Use https for the target S3 endpoint when scheme is omitted")
+	scope := flag.String("scope", "all", "Rewrite scope: all, blog, or recipe")
 	dryRun := flag.Bool("dry-run", false, "Preview changes without updating the database")
 	flag.Parse()
 
 	if *databaseDSN == "" {
 		exitf("DATABASE_DSN is required")
-	}
-	if *legacyEndpoint == "" {
-		exitf("legacy endpoint is required")
 	}
 	if *targetEndpoint == "" {
 		exitf("target S3 endpoint is required")
@@ -62,14 +69,38 @@ func main() {
 	if *targetBucket == "" {
 		exitf("target S3 bucket is required")
 	}
+	if *scope != "all" && *scope != "blog" && *scope != "recipe" {
+		exitf("scope must be one of: all, blog, recipe")
+	}
 
-	rewriter, err := storage.NewLegacyURLRewriter(*legacyEndpoint, *legacyUseSSL, storage.Config{
-		Endpoint:   *targetEndpoint,
-		BucketName: *targetBucket,
-		UseSSL:     *targetUseSSL,
-	})
+	var err error
+	targetConfig := storage.Config{
+		Endpoint:      *targetEndpoint,
+		PublicBaseURL: *targetPublicBaseURL,
+		BucketName:    *targetBucket,
+		UseSSL:        *targetUseSSL,
+	}
+
+	var legacyRewriter *storage.LegacyURLRewriter
+	if *scope == "all" {
+		if *legacyEndpoint == "" {
+			exitf("legacy endpoint is required for scope=all")
+		}
+
+		legacyRewriter, err = storage.NewLegacyURLRewriter(*legacyEndpoint, *legacyUseSSL, targetConfig)
+		if err != nil {
+			exitf("failed to build legacy url rewriter: %v", err)
+		}
+	}
+
+	blogRewriter, err := storage.NewBlogImageURLCanonicalizer(targetConfig)
 	if err != nil {
-		exitf("failed to build URL rewriter: %v", err)
+		exitf("failed to build blog url canonicalizer: %v", err)
+	}
+
+	recipeRewriter, err := storage.NewRecipeImageURLCanonicalizer(targetConfig)
+	if err != nil {
+		exitf("failed to build recipe url canonicalizer: %v", err)
 	}
 
 	db, err := sqlx.Connect("postgres", *databaseDSN)
@@ -91,7 +122,7 @@ func main() {
 		executor = tx
 	}
 
-	summary, err := rewriteAll(ctx, executor, rewriter, *dryRun)
+	summary, err := rewriteAll(ctx, executor, legacyRewriter, blogRewriter, recipeRewriter, *scope, *dryRun)
 	if err != nil {
 		exitf("rewrite failed: %v", err)
 	}
@@ -116,18 +147,47 @@ func main() {
 	fmt.Printf("total: %d\n", total)
 }
 
-func rewriteAll(ctx context.Context, executor queryExecutor, rewriter *storage.LegacyURLRewriter, dryRun bool) ([]summaryRow, error) {
-	summary := make([]summaryRow, 0, 9)
+func rewriteAll(
+	ctx context.Context,
+	executor queryExecutor,
+	legacyRewriter *storage.LegacyURLRewriter,
+	blogRewriter *storage.BlogImageURLCanonicalizer,
+	recipeRewriter *storage.RecipeImageURLCanonicalizer,
+	scope string,
+	dryRun bool,
+) ([]summaryRow, error) {
+	summary := make([]summaryRow, 0, 12)
 
-	urlColumns := []struct {
+	if scope == "all" {
+		urlColumns := []struct {
+			label  string
+			table  string
+			column string
+		}{
+			{label: "ai_analysis_logs.image_url", table: "ai_analysis_logs", column: "image_url"},
+			{label: "ai_violations.image_url", table: "ai_violations", column: "image_url"},
+		}
+
+		for _, item := range urlColumns {
+			updated, err := rewriteURLColumn(ctx, executor, legacyRewriter, item.table, item.column, dryRun)
+			if err != nil {
+				return nil, err
+			}
+			summary = append(summary, summaryRow{label: item.label, updated: updated})
+		}
+
+		updatedMetadata, err := rewriteMetadataColumn(ctx, executor, legacyRewriter, dryRun)
+		if err != nil {
+			return nil, err
+		}
+		summary = append(summary, summaryRow{label: "admin_notifications.metadata.imageUrl", updated: updatedMetadata})
+	}
+
+	recipeURLColumns := []struct {
 		label  string
 		table  string
 		column string
 	}{
-		{label: "ai_analysis_logs.image_url", table: "ai_analysis_logs", column: "image_url"},
-		{label: "ai_violations.image_url", table: "ai_violations", column: "image_url"},
-		{label: "blog_articles.preview_image_url", table: "blog_articles", column: "preview_image_url"},
-		{label: "blog_articles.og_image_url", table: "blog_articles", column: "og_image_url"},
 		{label: "recipe_books.og_image_url", table: "recipe_books", column: "og_image_url"},
 		{label: "recipes.main_image_url", table: "recipes", column: "main_image_url"},
 		{label: "recipes.og_image_url", table: "recipes", column: "og_image_url"},
@@ -135,30 +195,49 @@ func rewriteAll(ctx context.Context, executor queryExecutor, rewriter *storage.L
 		{label: "recipe_images.image_url", table: "recipe_images", column: "image_url"},
 	}
 
-	for _, item := range urlColumns {
-		updated, err := rewriteURLColumn(ctx, executor, rewriter, item.table, item.column, dryRun)
+	if scope == "all" || scope == "recipe" {
+		for _, item := range recipeURLColumns {
+			updated, err := rewriteURLColumn(ctx, executor, recipeRewriter, item.table, item.column, dryRun)
+			if err != nil {
+				return nil, err
+			}
+			summary = append(summary, summaryRow{label: item.label, updated: updated})
+		}
+	}
+
+	blogURLColumns := []struct {
+		label  string
+		table  string
+		column string
+	}{
+		{label: "blog_articles.preview_image_url", table: "blog_articles", column: "preview_image_url"},
+		{label: "blog_articles.og_image_url", table: "blog_articles", column: "og_image_url"},
+	}
+
+	if scope == "all" || scope == "blog" {
+		for _, item := range blogURLColumns {
+			updated, err := rewriteURLColumn(ctx, executor, blogRewriter, item.table, item.column, dryRun)
+			if err != nil {
+				return nil, err
+			}
+			summary = append(summary, summaryRow{label: item.label, updated: updated})
+		}
+
+		updatedContent, err := rewriteBlogContent(ctx, executor, blogRewriter, dryRun)
 		if err != nil {
 			return nil, err
 		}
-		summary = append(summary, summaryRow{label: item.label, updated: updated})
+		summary = append(summary, summaryRow{label: "blog_articles.content_ru/content_en", updated: updatedContent})
 	}
-
-	updatedMetadata, err := rewriteMetadataColumn(ctx, executor, rewriter, dryRun)
-	if err != nil {
-		return nil, err
-	}
-	summary = append(summary, summaryRow{label: "admin_notifications.metadata.imageUrl", updated: updatedMetadata})
-
-	updatedContent, err := rewriteBlogContent(ctx, executor, rewriter, dryRun)
-	if err != nil {
-		return nil, err
-	}
-	summary = append(summary, summaryRow{label: "blog_articles.content_ru/content_en", updated: updatedContent})
 
 	return summary, nil
 }
 
-func rewriteURLColumn(ctx context.Context, executor queryExecutor, rewriter *storage.LegacyURLRewriter, table, column string, dryRun bool) (int, error) {
+func rewriteURLColumn(ctx context.Context, executor queryExecutor, rewriter urlRewriter, table, column string, dryRun bool) (int, error) {
+	if rewriter == nil {
+		return 0, nil
+	}
+
 	query := fmt.Sprintf("SELECT id, %s AS value FROM %s WHERE %s IS NOT NULL", column, table, column)
 
 	var rows []stringRow
@@ -189,6 +268,10 @@ func rewriteURLColumn(ctx context.Context, executor queryExecutor, rewriter *sto
 }
 
 func rewriteMetadataColumn(ctx context.Context, executor queryExecutor, rewriter *storage.LegacyURLRewriter, dryRun bool) (int, error) {
+	if rewriter == nil {
+		return 0, nil
+	}
+
 	const query = `
 		SELECT id, metadata::text AS value
 		FROM admin_notifications
@@ -220,7 +303,11 @@ func rewriteMetadataColumn(ctx context.Context, executor queryExecutor, rewriter
 	return updated, nil
 }
 
-func rewriteBlogContent(ctx context.Context, executor queryExecutor, rewriter *storage.LegacyURLRewriter, dryRun bool) (int, error) {
+func rewriteBlogContent(ctx context.Context, executor queryExecutor, rewriter textRewriter, dryRun bool) (int, error) {
+	if rewriter == nil {
+		return 0, nil
+	}
+
 	const query = `
 		SELECT id, content_ru, content_en
 		FROM blog_articles

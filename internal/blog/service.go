@@ -18,6 +18,7 @@ import (
 	htmlrenderer "github.com/yuin/goldmark/renderer/html"
 
 	"github.com/jourloy/somivyn/internal/ai"
+	"github.com/jourloy/somivyn/internal/lib"
 	"github.com/jourloy/somivyn/internal/storage"
 )
 
@@ -84,9 +85,23 @@ type service struct {
 	aiProviderName   string
 	fallbackProvider ai.AIProvider
 	fallbackName     string
+	urlCanonicalizer *storage.BlogImageURLCanonicalizer
 }
 
 func NewService(repo Repository, storageService storage.Service) (Service, error) {
+	urlCanonicalizer, err := storage.NewBlogImageURLCanonicalizerFromService(storageService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blog url canonicalizer: %w", err)
+	}
+
+	return newService(repo, storageService, urlCanonicalizer)
+}
+
+func newService(
+	repo Repository,
+	storageService storage.Service,
+	urlCanonicalizer *storage.BlogImageURLCanonicalizer,
+) (Service, error) {
 	logger := log.NewWithOptions(os.Stderr, log.Options{
 		Prefix: "[blog-svc]",
 		Level:  log.DebugLevel,
@@ -127,6 +142,7 @@ func NewService(repo Repository, storageService storage.Service) (Service, error
 		aiProviderName:   articleProviderName,
 		fallbackProvider: fallbackProvider,
 		fallbackName:     fallbackName,
+		urlCanonicalizer: urlCanonicalizer,
 	}, nil
 }
 
@@ -135,7 +151,18 @@ func NewServiceFromConfig(repo Repository) (Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage service: %w", err)
 	}
-	return NewService(repo, storageService)
+
+	urlCanonicalizer, err := storage.NewBlogImageURLCanonicalizer(storage.Config{
+		Endpoint:      lib.Config.S3Endpoint,
+		PublicBaseURL: lib.Config.S3PublicBaseURL,
+		BucketName:    lib.Config.S3BucketName,
+		UseSSL:        lib.Config.S3UseSSL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blog url canonicalizer: %w", err)
+	}
+
+	return newService(repo, storageService, urlCanonicalizer)
 }
 
 // ===== Categories =====
@@ -178,6 +205,7 @@ func (s *service) GetAllTags(ctx context.Context) ([]Tag, error) {
 
 func (s *service) CreateArticle(ctx context.Context, a ArticleCreate) (*Article, error) {
 	a.Sources = normalizeSourceURLs(a.Sources)
+	s.normalizeArticleCreateInput(&a)
 
 	article, err := s.repo.CreateArticle(ctx, a)
 	if err != nil {
@@ -296,6 +324,7 @@ func (s *service) UpdateArticle(ctx context.Context, a ArticleUpdate) (*Article,
 	}
 
 	a.Sources = normalizeSourceURLs(a.Sources)
+	s.normalizeArticleUpdateInput(&a)
 
 	article, err := s.repo.UpdateArticle(ctx, a)
 	if err != nil {
@@ -689,6 +718,10 @@ func (s *service) loadArticleWithRelations(ctx context.Context, article *Article
 }
 
 func (s *service) loadArticleRelationsInPlace(ctx context.Context, article *Article) {
+	if article == nil {
+		return
+	}
+
 	// Load category
 	if article.CategoryId != nil {
 		cat, err := s.repo.GetCategoryById(ctx, *article.CategoryId)
@@ -704,6 +737,8 @@ func (s *service) loadArticleRelationsInPlace(ctx context.Context, article *Arti
 	} else {
 		article.Tags = []Tag{}
 	}
+
+	s.canonicalizeArticleInPlace(article)
 }
 
 func isPublishableStatus(status string) bool {
@@ -752,4 +787,71 @@ func CanAccessArticle(status string, viewer ViewerAccess) bool {
 	default:
 		return false
 	}
+}
+
+func (s *service) normalizeArticleCreateInput(article *ArticleCreate) {
+	if article == nil {
+		return
+	}
+
+	article.PreviewImageUrl = s.canonicalizeOptionalURL(article.PreviewImageUrl)
+	article.OgImageUrl = s.canonicalizeOptionalURL(article.OgImageUrl)
+	article.ContentRu = s.canonicalizeHTML(article.ContentRu)
+	article.ContentEn = s.canonicalizeHTML(article.ContentEn)
+}
+
+func (s *service) normalizeArticleUpdateInput(article *ArticleUpdate) {
+	if article == nil {
+		return
+	}
+
+	article.PreviewImageUrl = s.canonicalizeOptionalURL(article.PreviewImageUrl)
+	article.OgImageUrl = s.canonicalizeOptionalURL(article.OgImageUrl)
+	article.ContentRu = s.canonicalizeHTML(article.ContentRu)
+	article.ContentEn = s.canonicalizeHTML(article.ContentEn)
+}
+
+func (s *service) canonicalizeArticleInPlace(article *Article) {
+	if article == nil {
+		return
+	}
+
+	article.PreviewImageUrl = s.canonicalizeOptionalURL(article.PreviewImageUrl)
+	article.OgImageUrl = s.canonicalizeOptionalURL(article.OgImageUrl)
+	article.ContentRu = s.canonicalizeHTML(article.ContentRu)
+	article.ContentEn = s.canonicalizeHTML(article.ContentEn)
+}
+
+func (s *service) canonicalizeOptionalURL(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	if s.urlCanonicalizer == nil {
+		return &trimmed
+	}
+
+	rewritten, changed := s.urlCanonicalizer.RewriteURL(trimmed)
+	if changed {
+		trimmed = rewritten
+	}
+
+	return &trimmed
+}
+
+func (s *service) canonicalizeHTML(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || s.urlCanonicalizer == nil {
+		return trimmed
+	}
+
+	rewritten, changed := s.urlCanonicalizer.RewriteText(trimmed)
+	if changed {
+		return rewritten
+	}
+	return trimmed
 }

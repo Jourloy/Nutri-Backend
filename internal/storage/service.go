@@ -24,12 +24,13 @@ const (
 )
 
 type Config struct {
-	Endpoint   string
-	AccessKey  string
-	SecretKey  string
-	BucketName string
-	Region     string
-	UseSSL     bool
+	Endpoint      string
+	PublicBaseURL string
+	AccessKey     string
+	SecretKey     string
+	BucketName    string
+	Region        string
+	UseSSL        bool
 }
 
 type Service interface {
@@ -72,6 +73,11 @@ func NewS3Service(cfg Config) (Service, error) {
 		return nil, err
 	}
 
+	publicBaseURL, err := resolvePublicBaseURL(cfg.Endpoint, cfg.PublicBaseURL, cfg.UseSSL)
+	if err != nil {
+		return nil, err
+	}
+
 	resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		if service == s3.ServiceID {
 			return aws.Endpoint{
@@ -96,18 +102,27 @@ func NewS3Service(cfg Config) (Service, error) {
 		o.UsePathStyle = true
 	})
 
-	return newService(client, cfg.BucketName, baseURL)
+	return newService(client, cfg.BucketName, publicBaseURL)
 }
 
 func NewS3ServiceFromConfig() (Service, error) {
 	return NewS3Service(Config{
-		Endpoint:   lib.Config.S3Endpoint,
-		AccessKey:  lib.Config.S3AccessKey,
-		SecretKey:  lib.Config.S3SecretKey,
-		BucketName: lib.Config.S3BucketName,
-		Region:     lib.Config.S3Region,
-		UseSSL:     lib.Config.S3UseSSL,
+		Endpoint:      lib.Config.S3Endpoint,
+		PublicBaseURL: lib.Config.S3PublicBaseURL,
+		AccessKey:     lib.Config.S3AccessKey,
+		SecretKey:     lib.Config.S3SecretKey,
+		BucketName:    lib.Config.S3BucketName,
+		Region:        lib.Config.S3Region,
+		UseSSL:        lib.Config.S3UseSSL,
 	})
+}
+
+func resolvePublicBaseURL(endpoint, publicBaseURL string, useSSL bool) (string, error) {
+	candidate := strings.TrimSpace(publicBaseURL)
+	if candidate == "" {
+		candidate = endpoint
+	}
+	return NormalizeBaseURL(candidate, useSSL)
 }
 
 func NormalizeBaseURL(endpoint string, useSSL bool) (string, error) {

@@ -32,6 +32,7 @@ type conf struct {
 	PerplexityAPIKey string
 	OpenAIAPIKey     string
 	S3Endpoint       string
+	S3PublicBaseURL  string
 	S3AccessKey      string
 	S3SecretKey      string
 	S3BucketName     string
@@ -200,6 +201,10 @@ func ParseENV() error {
 	} else {
 		logger.Error("cannot find env S3_ENDPOINT")
 		return errors.New("cannot find env S3_ENDPOINT")
+	}
+
+	if env, exist := os.LookupEnv("S3_PUBLIC_BASE_URL"); exist {
+		Config.S3PublicBaseURL = env
 	}
 
 	if env, exist := os.LookupEnv("S3_ACCESS_KEY"); exist {
