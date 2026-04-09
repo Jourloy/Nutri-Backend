@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jourloy/nutri-backend/internal/fit"
+	"github.com/jourloy/somivyn/internal/fit"
 )
 
 type Service interface {

@@ -3,8 +3,8 @@ package recommendation
 import (
 	"context"
 
-	"github.com/jourloy/nutri-backend/internal/fit"
-	"github.com/jourloy/nutri-backend/internal/product"
+	"github.com/jourloy/somivyn/internal/fit"
+	"github.com/jourloy/somivyn/internal/product"
 )
 
 type Recommendation struct {

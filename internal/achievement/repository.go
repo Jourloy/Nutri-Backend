@@ -6,7 +6,7 @@ import (
 
     "github.com/jmoiron/sqlx"
 
-    "github.com/jourloy/nutri-backend/internal/database"
+    "github.com/jourloy/somivyn/internal/database"
 )
 
 type Repository interface {

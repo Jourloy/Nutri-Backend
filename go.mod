@@ -1,4 +1,4 @@
-module github.com/jourloy/nutri-backend
+module github.com/jourloy/somivyn
 
 go 1.24
 

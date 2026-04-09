@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/jourloy/nutri-backend/internal/storage"
+	"github.com/jourloy/somivyn/internal/storage"
 )
 
 type fakeStorage struct {
@@ -42,7 +42,7 @@ func TestProcessAndUploadImage_UsesAIFolderAndJPEG(t *testing.T) {
 		t.Fatalf("png.Encode() error = %v", err)
 	}
 
-	storageFake := &fakeStorage{url: "https://cdn.example.com/nutri-images/ai/user-1/file.jpg"}
+	storageFake := &fakeStorage{url: "https://cdn.example.com/somivyn-images/ai/user-1/file.jpg"}
 	svc := &service{storage: storageFake}
 
 	gotURL, base64Image, err := svc.processAndUploadImage(context.Background(), "user-1", input.Bytes())

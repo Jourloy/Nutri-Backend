@@ -11,11 +11,11 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/nutri-backend/internal/ai"
-	"github.com/jourloy/nutri-backend/internal/product"
-	"github.com/jourloy/nutri-backend/internal/telegram"
-	"github.com/jourloy/nutri-backend/internal/user"
-	"github.com/jourloy/nutri-backend/pkg/timeutil"
+	"github.com/jourloy/somivyn/internal/ai"
+	"github.com/jourloy/somivyn/internal/product"
+	"github.com/jourloy/somivyn/internal/telegram"
+	"github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/somivyn/pkg/timeutil"
 )
 
 var (

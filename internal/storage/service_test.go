@@ -82,13 +82,13 @@ func TestNormalizeBaseURL(t *testing.T) {
 func TestBuildPublicURL(t *testing.T) {
 	t.Parallel()
 
-	svc, err := newService(&fakeS3Client{}, "nutri-images", "https://cdn.example.com/storage")
+	svc, err := newService(&fakeS3Client{}, "somivyn-images", "https://cdn.example.com/storage")
 	if err != nil {
 		t.Fatalf("newService() error = %v", err)
 	}
 
 	got := svc.BuildPublicURL(FolderBlog, "2026/03/file.png")
-	want := "https://cdn.example.com/storage/nutri-images/blog/2026/03/file.png"
+	want := "https://cdn.example.com/storage/somivyn-images/blog/2026/03/file.png"
 	if got != want {
 		t.Fatalf("BuildPublicURL() = %q, want %q", got, want)
 	}
@@ -100,7 +100,7 @@ func TestEnsureFolderCreatesMarkerOnlyOnce(t *testing.T) {
 	client := &fakeS3Client{
 		listOutputs: []*s3.ListObjectsV2Output{{}},
 	}
-	svcRaw, err := newService(client, "nutri-images", "https://cdn.example.com")
+	svcRaw, err := newService(client, "somivyn-images", "https://cdn.example.com")
 	if err != nil {
 		t.Fatalf("newService() error = %v", err)
 	}
@@ -135,7 +135,7 @@ func TestEnsureFolderSkipsMarkerWhenPrefixExists(t *testing.T) {
 			Contents: []types.Object{{Key: aws.String("recipe/existing.jpg")}},
 		}},
 	}
-	svc, err := newService(client, "nutri-images", "https://cdn.example.com")
+	svc, err := newService(client, "somivyn-images", "https://cdn.example.com")
 	if err != nil {
 		t.Fatalf("newService() error = %v", err)
 	}
@@ -154,7 +154,7 @@ func TestUploadReturnsPathStyleURL(t *testing.T) {
 	client := &fakeS3Client{
 		listOutputs: []*s3.ListObjectsV2Output{{}},
 	}
-	svc, err := newService(client, "nutri-images", "https://cdn.example.com")
+	svc, err := newService(client, "somivyn-images", "https://cdn.example.com")
 	if err != nil {
 		t.Fatalf("newService() error = %v", err)
 	}
@@ -164,7 +164,7 @@ func TestUploadReturnsPathStyleURL(t *testing.T) {
 		t.Fatalf("Upload() error = %v", err)
 	}
 
-	if got != "https://cdn.example.com/nutri-images/blog/2026/03/file.jpg" {
+	if got != "https://cdn.example.com/somivyn-images/blog/2026/03/file.jpg" {
 		t.Fatalf("Upload() url = %q", got)
 	}
 	if len(client.putInputs) != 2 {

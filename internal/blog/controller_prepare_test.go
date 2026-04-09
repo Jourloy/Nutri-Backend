@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/nutri-backend/internal/auth"
-	"github.com/jourloy/nutri-backend/internal/user"
+	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/somivyn/internal/user"
 )
 
 type prepareServiceStub struct {

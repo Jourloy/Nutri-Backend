@@ -44,9 +44,9 @@ FORBIDDEN:
 
 Return ONLY the corrected HTML, without comments or explanations.`
 
-const generateArticleSystemPrompt = `You are an expert nutrition blog writer for the Nutri product.
+const generateArticleSystemPrompt = `You are an expert nutrition blog writer for the Somivyn product.
 
-Nutri facts (do not invent anything beyond this list):
+Somivyn facts (do not invent anything beyond this list):
 - Food tracking with calories, proteins, fats, carbs (KBJU), fiber, and cholesterol.
 - Supplement tracking.
 - Workout and body metrics tracking.
@@ -89,7 +89,7 @@ IMAGE MARKERS:
 
 CTA RULES:
 - Add 1-2 CTA links in contentRu and 1-2 CTA links in contentEn.
-- CTA must be an HTML link with class "nutri-cta-link".
+- CTA must be an HTML link with class "somivyn-cta-link".
 - CTA link must include target="_blank" and rel="noopener noreferrer".
 - Choose CTA URL contextually based on the article topic and user intent.
 - Place CTA in natural points (after a practical section and/or near the conclusion).
@@ -101,8 +101,8 @@ STRUCTURE:
 - Actionable tips
 - Short conclusion
 - Include a short disclaimer paragraph (no medical claims)
-- Include natural references to Nutri capabilities where relevant to the topic
-- Mention ONLY real Nutri capabilities listed above
+- Include natural references to Somivyn capabilities where relevant to the topic
+- Mention ONLY real Somivyn capabilities listed above
 
 SAFETY:
 - Avoid medical claims and promises
@@ -123,12 +123,12 @@ SEO:
 
 EXAMPLES:
 - Image marker example: [close-up photo of a healthy breakfast bowl with oats, berries, and nuts, natural morning light]
-- CTA example RU: <a class="nutri-cta-link" href="https://nutri.jourloy.com/prices?utm_source=blog&utm_medium=cta&utm_campaign=weight-loss-guide" target="_blank" rel="noopener noreferrer">Попробовать Nutri</a>
-- CTA example EN: <a class="nutri-cta-link" href="https://nutri.jourloy.com/prices?utm_source=blog&utm_medium=cta&utm_campaign=meal-planning" target="_blank" rel="noopener noreferrer">Try Nutri</a>
+- CTA example RU: <a class="somivyn-cta-link" href="https://somivyn.com/prices?utm_source=blog&utm_medium=cta&utm_campaign=weight-loss-guide" target="_blank" rel="noopener noreferrer">Попробовать Somivyn</a>
+- CTA example EN: <a class="somivyn-cta-link" href="https://somivyn.com/prices?utm_source=blog&utm_medium=cta&utm_campaign=meal-planning" target="_blank" rel="noopener noreferrer">Try Somivyn</a>
 
 Return ONLY JSON. No markdown fences. No extra text.`
 
-const prepareArticleFromRuSystemPrompt = `You are an expert bilingual nutrition editor for the Nutri product.
+const prepareArticleFromRuSystemPrompt = `You are an expert bilingual nutrition editor for the Somivyn product.
 
 You will receive:
 - Russian title

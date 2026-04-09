@@ -15,7 +15,7 @@ import (
     "time"
 
 	"github.com/charmbracelet/log"
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/somivyn/internal/lib"
 )
 
 type TBankClient interface {

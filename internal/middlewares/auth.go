@@ -8,9 +8,9 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/jourloy/nutri-backend/internal/auth"
-	"github.com/jourloy/nutri-backend/internal/lib"
-	"github.com/jourloy/nutri-backend/internal/user"
+	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/somivyn/internal/user"
 )
 
 func Auth(next http.Handler) http.Handler {
@@ -24,8 +24,8 @@ func Auth(next http.Handler) http.Handler {
 
 		jwtCfg := auth.Config{
 			Secret:     []byte(lib.Config.JWTSecret),
-			Issuer:     "nutri-api",
-			Audience:   "nutri-web",
+			Issuer:     "somivyn-api",
+			Audience:   "somivyn-web",
 			AccessTTL:  1 * time.Hour,
 			RefreshTTL: 30 * 24 * time.Hour,
 		}

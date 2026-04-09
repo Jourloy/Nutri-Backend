@@ -3,7 +3,7 @@ package middlewares
 import (
 	"net/http"
 
-	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/somivyn/internal/auth"
 )
 
 // AdminOnly проверяет, что пользователь является администратором

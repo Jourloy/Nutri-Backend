@@ -5,9 +5,9 @@ import (
     "net/http"
     "time"
 
-    "github.com/jourloy/nutri-backend/internal/auth"
-    "github.com/jourloy/nutri-backend/internal/database"
-    "github.com/jourloy/nutri-backend/internal/subscription"
+    "github.com/jourloy/somivyn/internal/auth"
+    "github.com/jourloy/somivyn/internal/database"
+    "github.com/jourloy/somivyn/internal/subscription"
 )
 
 // Subscription middleware loads current user's subscription/plan info

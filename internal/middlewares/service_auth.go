@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/somivyn/internal/lib"
 )
 
 type serviceAuthKey struct{}

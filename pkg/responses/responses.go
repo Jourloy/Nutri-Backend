@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jourloy/nutri-backend/pkg/errors"
-	"github.com/jourloy/nutri-backend/pkg/logger"
+	"github.com/jourloy/somivyn/pkg/errors"
+	"github.com/jourloy/somivyn/pkg/logger"
 )
 
 // Response represents a standard API response

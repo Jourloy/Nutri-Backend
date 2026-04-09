@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/jourloy/nutri-backend/internal/storage"
+	"github.com/jourloy/somivyn/internal/storage"
 )
 
 type fakeStorage struct {
@@ -31,7 +31,7 @@ func (f *fakeStorage) BuildPublicURL(folder, key string) string { return "" }
 func TestUploadImage_UsesBlogFolderAndContentType(t *testing.T) {
 	t.Parallel()
 
-	storageFake := &fakeStorage{url: "https://cdn.example.com/nutri-images/blog/2026/03/cover.png"}
+	storageFake := &fakeStorage{url: "https://cdn.example.com/somivyn-images/blog/2026/03/cover.png"}
 	svc := &service{storage: storageFake}
 
 	payload := []byte("png-bytes")

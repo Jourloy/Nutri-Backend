@@ -3,15 +3,15 @@ package main
 import (
 	"github.com/joho/godotenv"
 
-	"github.com/jourloy/nutri-backend/internal/lib"
-	"github.com/jourloy/nutri-backend/internal/server"
-	"github.com/jourloy/nutri-backend/pkg/logger"
+	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/somivyn/internal/server"
+	"github.com/jourloy/somivyn/pkg/logger"
 )
 
 func main() {
 	// Initialize logger
 	logger.Init()
-	logger.Info("Nutri Backend", "version", "1.0.0")
+	logger.Info("Somivyn Backend", "version", "1.0.0")
 
 	// Load .env
 	if err := godotenv.Load(); err != nil {

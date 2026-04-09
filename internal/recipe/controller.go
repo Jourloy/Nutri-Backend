@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/nutri-backend/internal/auth"
+	"github.com/jourloy/somivyn/internal/auth"
 )
 
 var (
@@ -39,8 +39,8 @@ func NewController() (*Controller, error) {
 func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/recipe", func(r chi.Router) {
 		// Public endpoints (no auth required)
-		r.Get("/nutri", c.GetNutriRecipes)
-		r.Get("/nutri/{slug}", c.GetNutriRecipeBySlug)
+		r.Get("/somivyn", c.GetSomivynRecipes)
+		r.Get("/somivyn/{slug}", c.GetSomivynRecipeBySlug)
 		r.Get("/shared/{token}", c.GetSharedRecipe)
 		r.Get("/shared/book/{token}", c.GetSharedBook)
 		r.Get("/shared/book/{token}/recipes", c.GetSharedBookRecipes)
@@ -92,11 +92,11 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(requireAdmin)
 
-			r.Get("/admin/recipes/{id}", c.GetNutriRecipeById)
-			r.Post("/admin/recipes", c.CreateNutriRecipe)
-			r.Put("/admin/recipes/{id}", c.UpdateNutriRecipe)
-			r.Delete("/admin/recipes/{id}", c.DeleteNutriRecipe)
-			r.Get("/admin/recipes", c.GetAllNutriRecipes)
+			r.Get("/admin/recipes/{id}", c.GetSomivynRecipeById)
+			r.Post("/admin/recipes", c.CreateSomivynRecipe)
+			r.Put("/admin/recipes/{id}", c.UpdateSomivynRecipe)
+			r.Delete("/admin/recipes/{id}", c.DeleteSomivynRecipe)
+			r.Get("/admin/recipes", c.GetAllSomivynRecipes)
 
 			r.Post("/admin/categories", c.CreateSystemCategory)
 			r.Post("/admin/tags", c.CreateSystemTag)
@@ -106,8 +106,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	})
 
 	logger.Info("╔═════ Recipe")
-	logger.Info("║    GET /recipe/nutri (public: get Nutri recipes)")
-	logger.Info("║    GET /recipe/nutri/{slug} (public: get Nutri recipe by slug)")
+	logger.Info("║    GET /recipe/somivyn (public: get Somivyn recipes)")
+	logger.Info("║    GET /recipe/somivyn/{slug} (public: get Somivyn recipe by slug)")
 	logger.Info("║    GET /recipe/shared/{token} (public: get shared recipe)")
 	logger.Info("║    GET /recipe/shared/book/{token} (public: get shared book)")
 	logger.Info("║    GET /recipe/categories (public: get categories)")
@@ -126,10 +126,10 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("║   POST /recipe/recipes/{id}/copy (auth: copy recipe)")
 	logger.Info("║   POST /recipe/recipes/{id}/to-diary (auth: add to diary)")
 	logger.Info("║   POST /recipe/recipes/{id}/calculate-nutrition (auth: AI nutrition calc)")
-	logger.Info("║    GET /recipe/admin/recipes/{id} (admin: get Nutri recipe by id)")
-	logger.Info("║   POST /recipe/admin/recipes (admin: create Nutri recipe)")
-	logger.Info("║    PUT /recipe/admin/recipes/{id} (admin: update Nutri recipe)")
-	logger.Info("║ DELETE /recipe/admin/recipes/{id} (admin: delete Nutri recipe)")
+	logger.Info("║    GET /recipe/admin/recipes/{id} (admin: get Somivyn recipe by id)")
+	logger.Info("║   POST /recipe/admin/recipes (admin: create Somivyn recipe)")
+	logger.Info("║    PUT /recipe/admin/recipes/{id} (admin: update Somivyn recipe)")
+	logger.Info("║ DELETE /recipe/admin/recipes/{id} (admin: delete Somivyn recipe)")
 	logger.Info("║   POST /recipe/admin/tags (admin: create system tag)")
 	logger.Info("║    PUT /recipe/admin/tags/{id} (admin: update system tag)")
 	logger.Info("║ DELETE /recipe/admin/tags/{id} (admin: delete system tag)")
@@ -211,12 +211,12 @@ func parseRecipeListParams(r *http.Request) RecipeListParams {
 
 // ===== Public Endpoints =====
 
-func (c *Controller) GetNutriRecipes(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) GetSomivynRecipes(w http.ResponseWriter, r *http.Request) {
 	params := parseRecipeListParams(r)
 
-	response, err := c.service.GetNutriRecipes(context.Background(), params)
+	response, err := c.service.GetSomivynRecipes(context.Background(), params)
 	if err != nil {
-		logger.Error("failed to get Nutri recipes", "error", err)
+		logger.Error("failed to get Somivyn recipes", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -225,12 +225,12 @@ func (c *Controller) GetNutriRecipes(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (c *Controller) GetNutriRecipeBySlug(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) GetSomivynRecipeBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
-	recipe, err := c.service.GetNutriRecipeBySlug(context.Background(), slug)
+	recipe, err := c.service.GetSomivynRecipeBySlug(context.Background(), slug)
 	if err != nil {
-		logger.Error("failed to get Nutri recipe", "slug", slug, "error", err)
+		logger.Error("failed to get Somivyn recipe", "slug", slug, "error", err)
 		http.Error(w, "recipe not found", http.StatusNotFound)
 		return
 	}
@@ -886,7 +886,7 @@ func (c *Controller) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 // ===== Admin Endpoints =====
 
-func (c *Controller) GetNutriRecipeById(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) GetSomivynRecipeById(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -894,9 +894,9 @@ func (c *Controller) GetNutriRecipeById(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	recipe, err := c.service.GetNutriRecipeById(context.Background(), id)
+	recipe, err := c.service.GetSomivynRecipeById(context.Background(), id)
 	if err != nil {
-		logger.Error("failed to get Nutri recipe by id", "id", id, "error", err)
+		logger.Error("failed to get Somivyn recipe by id", "id", id, "error", err)
 		http.Error(w, "recipe not found", http.StatusNotFound)
 		return
 	}
@@ -905,7 +905,7 @@ func (c *Controller) GetNutriRecipeById(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(recipe)
 }
 
-func (c *Controller) CreateNutriRecipe(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) CreateSomivynRecipe(w http.ResponseWriter, r *http.Request) {
 	var rc RecipeCreate
 	if err := json.NewDecoder(r.Body).Decode(&rc); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -917,9 +917,9 @@ func (c *Controller) CreateNutriRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recipe, err := c.service.CreateNutriRecipe(context.Background(), rc)
+	recipe, err := c.service.CreateSomivynRecipe(context.Background(), rc)
 	if err != nil {
-		logger.Error("failed to create Nutri recipe", "error", err)
+		logger.Error("failed to create Somivyn recipe", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -929,7 +929,7 @@ func (c *Controller) CreateNutriRecipe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(recipe)
 }
 
-func (c *Controller) UpdateNutriRecipe(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) UpdateSomivynRecipe(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -944,9 +944,9 @@ func (c *Controller) UpdateNutriRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	ru.Id = id
 
-	recipe, err := c.service.UpdateNutriRecipe(context.Background(), ru)
+	recipe, err := c.service.UpdateSomivynRecipe(context.Background(), ru)
 	if err != nil {
-		logger.Error("failed to update Nutri recipe", "id", id, "error", err)
+		logger.Error("failed to update Somivyn recipe", "id", id, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -955,7 +955,7 @@ func (c *Controller) UpdateNutriRecipe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(recipe)
 }
 
-func (c *Controller) DeleteNutriRecipe(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) DeleteSomivynRecipe(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -963,8 +963,8 @@ func (c *Controller) DeleteNutriRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.service.DeleteNutriRecipe(context.Background(), id); err != nil {
-		logger.Error("failed to delete Nutri recipe", "id", id, "error", err)
+	if err := c.service.DeleteSomivynRecipe(context.Background(), id); err != nil {
+		logger.Error("failed to delete Somivyn recipe", "id", id, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -973,13 +973,13 @@ func (c *Controller) DeleteNutriRecipe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
-func (c *Controller) GetAllNutriRecipes(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) GetAllSomivynRecipes(w http.ResponseWriter, r *http.Request) {
 	params := parseRecipeListParams(r)
 
-	// Get Nutri book and all recipes (including unpublished)
-	book, err := c.service.GetNutriBook(context.Background())
+	// Get Somivyn book and all recipes (including unpublished)
+	book, err := c.service.GetSomivynBook(context.Background())
 	if err != nil {
-		logger.Error("failed to get Nutri book", "error", err)
+		logger.Error("failed to get Somivyn book", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -988,7 +988,7 @@ func (c *Controller) GetAllNutriRecipes(w http.ResponseWriter, r *http.Request) 
 
 	response, err := c.service.GetRecipes(context.Background(), params)
 	if err != nil {
-		logger.Error("failed to get Nutri recipes", "error", err)
+		logger.Error("failed to get Somivyn recipes", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

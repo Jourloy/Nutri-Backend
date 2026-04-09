@@ -1,4 +1,4 @@
-# Nutri-Backend Refactoring Summary
+# Somivyn-Backend Refactoring Summary
 
 Рефакторинг выполнен на основе архитектуры Umbri-Backend.
 
@@ -37,7 +37,7 @@
 
 **Frontend:**
 - Обновлён базовый API клиент
-- Изменён файл: `Monorepo-Frontend/apps/nutri/lib/api/index.ts:18`
+- Изменён файл: `Monorepo-Frontend/apps/somivyn/lib/api/index.ts:18`
 - Все запросы автоматически используют `/api/v1` префикс
 
 ### 4. Улучшена Docker конфигурация
@@ -49,10 +49,10 @@
 - Копирование migrations и assets
 
 **docker-compose.yml** - Полная инфраструктура
-- Сервис `server` (Nutri-Backend)
+- Сервис `server` (Somivyn-Backend)
 - Сервис `postgres` (PostgreSQL 16)
 - Сервис `redis` (Redis 7)
-- Network: nutri-network
+- Network: somivyn-network
 - Volumes: postgres-data, redis-data
 - Health checks для всех сервисов
 
@@ -85,7 +85,7 @@ make dev             # Запуск с hot reload (требует air)
 ## Структура проекта после рефакторинга
 
 ```
-Nutri-Backend/
+Somivyn-Backend/
 ├── cmd/
 │   ├── server/           # Точка входа приложения
 │   │   └── main.go
@@ -135,7 +135,7 @@ GET  /api/v1/analytics/series
 ## Совместимость с фронтендом
 
 Фронтенд автоматически использует новые endpoints через обновлённый базовый API клиент. Изменён только один файл:
-- `Monorepo-Frontend/apps/nutri/lib/api/index.ts`
+- `Monorepo-Frontend/apps/somivyn/lib/api/index.ts`
 
 Все 14 API модулей (auth, product, body, fit, telegram, order, subscription, plan, analytics, achievement, template, feedback, ad, user) работают без изменений.
 

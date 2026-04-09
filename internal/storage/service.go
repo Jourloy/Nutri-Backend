@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/somivyn/internal/lib"
 )
 
 const (

@@ -17,8 +17,8 @@ import (
 	"github.com/yuin/goldmark/extension"
 	htmlrenderer "github.com/yuin/goldmark/renderer/html"
 
-	"github.com/jourloy/nutri-backend/internal/ai"
-	"github.com/jourloy/nutri-backend/internal/storage"
+	"github.com/jourloy/somivyn/internal/ai"
+	"github.com/jourloy/somivyn/internal/storage"
 )
 
 const (

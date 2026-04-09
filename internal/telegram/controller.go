@@ -11,8 +11,8 @@ import (
     "github.com/charmbracelet/log"
     "github.com/go-chi/chi/v5"
 
-    "github.com/jourloy/nutri-backend/internal/lib"
-    "github.com/jourloy/nutri-backend/internal/user"
+    "github.com/jourloy/somivyn/internal/lib"
+    "github.com/jourloy/somivyn/internal/user"
 )
 
 var (

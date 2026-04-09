@@ -18,10 +18,10 @@ func NewEmailTemplates() *EmailTemplates {
 	return &EmailTemplates{
 		VerificationCode: map[string]EmailTemplate{
 			"ru": {
-				Subject: "Код подтверждения email - Nutri",
+				Subject: "Код подтверждения email - Somivyn",
 				Body: `Здравствуйте!
 
-Ваш код подтверждения для привязки email к аккаунту Nutri:
+Ваш код подтверждения для привязки email к аккаунту Somivyn:
 
 %s
 
@@ -30,13 +30,13 @@ func NewEmailTemplates() *EmailTemplates {
 Если вы не запрашивали этот код, проигнорируйте это письмо.
 
 С уважением,
-Команда Nutri`,
+Команда Somivyn`,
 			},
 			"en": {
-				Subject: "Email Verification Code - Nutri",
+				Subject: "Email Verification Code - Somivyn",
 				Body: `Hello!
 
-Your verification code to link your email to your Nutri account:
+Your verification code to link your email to your Somivyn account:
 
 %s
 
@@ -45,7 +45,7 @@ The code is valid for 15 minutes.
 If you did not request this code, please ignore this email.
 
 Best regards,
-Nutri Team`,
+Somivyn Team`,
 			},
 		},
 	}

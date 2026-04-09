@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/somivyn/internal/lib"
 )
 
 var (

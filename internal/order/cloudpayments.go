@@ -5,13 +5,14 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/jourloy/nutri-backend/internal/lib"
+	"github.com/jourloy/somivyn/internal/lib"
 )
 
 type CloudPaymentsClient interface {
@@ -104,7 +105,7 @@ func (c *cloudPaymentsClient) CreateOrder(ctx context.Context, req CloudPayments
 		if res.Message != nil && *res.Message != "" {
 			msg = fmt.Sprintf("%s: %s", msg, *res.Message)
 		}
-		return nil, fmt.Errorf(msg)
+		return nil, errors.New(msg)
 	}
 	if res.Model.ID == "" || res.Model.URL == "" {
 		return nil, fmt.Errorf("cloudpayments create order returned empty data")
@@ -170,7 +171,7 @@ func (c *cloudPaymentsClient) CreateSubscription(ctx context.Context, req CloudP
 		if res.Message != nil && *res.Message != "" {
 			msg = fmt.Sprintf("%s: %s", msg, *res.Message)
 		}
-		return nil, fmt.Errorf(msg)
+		return nil, errors.New(msg)
 	}
 	if res.Model.ID == "" {
 		return nil, fmt.Errorf("cloudpayments create subscription returned empty id")

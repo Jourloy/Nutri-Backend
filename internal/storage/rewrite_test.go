@@ -7,7 +7,7 @@ func TestLegacyURLRewriterRewriteURL(t *testing.T) {
 
 	rewriter, err := NewLegacyURLRewriter("http://legacy.example.com:9000", false, Config{
 		Endpoint:   "https://cdn.example.com",
-		BucketName: "nutri-images",
+		BucketName: "somivyn-images",
 		UseSSL:     true,
 	})
 	if err != nil {
@@ -19,7 +19,7 @@ func TestLegacyURLRewriterRewriteURL(t *testing.T) {
 		t.Fatalf("expected URL to change")
 	}
 
-	want := "https://cdn.example.com/nutri-images/ai/user-1/file.jpg"
+	want := "https://cdn.example.com/somivyn-images/ai/user-1/file.jpg"
 	if got != want {
 		t.Fatalf("RewriteURL() = %q, want %q", got, want)
 	}
@@ -30,7 +30,7 @@ func TestLegacyURLRewriterRewriteText(t *testing.T) {
 
 	rewriter, err := NewLegacyURLRewriter("http://legacy.example.com:9000", false, Config{
 		Endpoint:   "https://cdn.example.com",
-		BucketName: "nutri-images",
+		BucketName: "somivyn-images",
 		UseSSL:     true,
 	})
 	if err != nil {
@@ -43,7 +43,7 @@ func TestLegacyURLRewriterRewriteText(t *testing.T) {
 		t.Fatalf("expected text to change")
 	}
 
-	want := `![cover](https://cdn.example.com/nutri-images/blog/2026/03/cover.png)`
+	want := `![cover](https://cdn.example.com/somivyn-images/blog/2026/03/cover.png)`
 	if got != want {
 		t.Fatalf("RewriteText() = %q, want %q", got, want)
 	}
@@ -54,7 +54,7 @@ func TestLegacyURLRewriterRewriteMetadata(t *testing.T) {
 
 	rewriter, err := NewLegacyURLRewriter("http://legacy.example.com:9000", false, Config{
 		Endpoint:   "https://cdn.example.com",
-		BucketName: "nutri-images",
+		BucketName: "somivyn-images",
 		UseSSL:     true,
 	})
 	if err != nil {
@@ -67,7 +67,7 @@ func TestLegacyURLRewriterRewriteMetadata(t *testing.T) {
 		t.Fatalf("expected metadata to change")
 	}
 
-	want := `{"imageUrl":"https://cdn.example.com/nutri-images/ai/u1/file.jpg","userId":"u1","violationId":1}`
+	want := `{"imageUrl":"https://cdn.example.com/somivyn-images/ai/u1/file.jpg","userId":"u1","violationId":1}`
 	if got != want {
 		t.Fatalf("RewriteMetadata() = %q, want %q", got, want)
 	}
@@ -78,7 +78,7 @@ func TestLegacyURLRewriterIgnoresExternalAndMigratedURLs(t *testing.T) {
 
 	rewriter, err := NewLegacyURLRewriter("http://legacy.example.com:9000", false, Config{
 		Endpoint:   "https://cdn.example.com",
-		BucketName: "nutri-images",
+		BucketName: "somivyn-images",
 		UseSSL:     true,
 	})
 	if err != nil {
@@ -87,7 +87,7 @@ func TestLegacyURLRewriterIgnoresExternalAndMigratedURLs(t *testing.T) {
 
 	cases := []string{
 		"https://example.com/other/file.jpg",
-		"https://cdn.example.com/nutri-images/blog/2026/03/cover.png",
+		"https://cdn.example.com/somivyn-images/blog/2026/03/cover.png",
 	}
 
 	for _, input := range cases {

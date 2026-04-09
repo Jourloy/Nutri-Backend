@@ -16,11 +16,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/argon2"
 
-	"github.com/jourloy/nutri-backend/internal/email"
-	"github.com/jourloy/nutri-backend/internal/lib"
-	"github.com/jourloy/nutri-backend/internal/telegram"
-	"github.com/jourloy/nutri-backend/internal/user"
-	"github.com/jourloy/nutri-backend/pkg/validator"
+	"github.com/jourloy/somivyn/internal/email"
+	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/somivyn/internal/telegram"
+	"github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/somivyn/pkg/validator"
 )
 
 const (
@@ -71,8 +71,8 @@ func NewService(repo Repository) Service {
 		emailService:    emailSvc,
 		jwtCfg: Config{
 			Secret:     []byte(lib.Config.JWTSecret),
-			Issuer:     "nutri-api",
-			Audience:   "nutri-web",
+			Issuer:     "somivyn-api",
+			Audience:   "somivyn-web",
 			AccessTTL:  30 * time.Hour,
 			RefreshTTL: 30 * 24 * time.Hour,
 		},
@@ -485,10 +485,10 @@ func (s *service) sendEmailPasswordReset(emailAddr string, resetURL string, loca
 
 	var subject, body string
 	if lang == "en" {
-		subject = "Nutri - Password Reset"
+		subject = "Somivyn - Password Reset"
 		body = fmt.Sprintf(`Hello!
 
-You requested a password reset for your Nutri account.
+You requested a password reset for your Somivyn account.
 
 Click the link below to reset your password:
 %s
@@ -498,12 +498,12 @@ This link is valid for 1 hour.
 If you didn't request this, please ignore this email.
 
 Best regards,
-Nutri Team`, resetURL)
+Somivyn Team`, resetURL)
 	} else {
-		subject = "Nutri - Сброс пароля"
+		subject = "Somivyn - Сброс пароля"
 		body = fmt.Sprintf(`Привет!
 
-Вы запросили сброс пароля для вашего аккаунта Nutri.
+Вы запросили сброс пароля для вашего аккаунта Somivyn.
 
 Перейдите по ссылке ниже, чтобы сбросить пароль:
 %s
@@ -513,7 +513,7 @@ Nutri Team`, resetURL)
 Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
 
 С уважением,
-Команда Nutri`, resetURL)
+Команда Somivyn`, resetURL)
 	}
 
 	return s.emailService.SendRawEmail(context.Background(), emailAddr, subject, body)

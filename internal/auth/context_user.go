@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"github.com/jourloy/nutri-backend/internal/user"
+	"github.com/jourloy/somivyn/internal/user"
 )
 
 // ContextWithUser is a wrapper around user.ContextWithUser for backward compatibility
