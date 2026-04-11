@@ -157,6 +157,12 @@ func TestBlogImageURLCanonicalizerRewriteURL(t *testing.T) {
 			changed: true,
 		},
 		{
+			name:    "legacy twc bucket path",
+			input:   "https://s3.twcstorage.ru/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/blog/2026/03/cover.png",
+			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
+			changed: true,
+		},
+		{
 			name:    "already canonical",
 			input:   "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",

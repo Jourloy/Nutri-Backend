@@ -26,6 +26,7 @@ var (
 		"minio.jourloy.com",
 		"nutri.jourloy.com",
 		"s3.somivyn.com",
+		"s3.twcstorage.ru",
 		"somivyn.com",
 		"somivyn.jourloy.com",
 		"72.56.69.80:9000",
