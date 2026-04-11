@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -44,6 +45,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 		// Public endpoints
 		r.Get("/articles", c.GetPublicArticles)
 		r.Get("/articles/{slug}", c.GetPublicArticle)
+		r.Get("/images/*", c.GetImage)
+		r.Head("/images/*", c.GetImage)
 		r.Get("/categories", c.GetCategories)
 		r.Get("/tags", c.GetTags)
 		r.Post("/articles/{id}/feedback", c.SubmitFeedback)
@@ -79,6 +82,8 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	logger.Info("╔═════ Blog")
 	logger.Info("║    GET /blog/articles (get public articles)")
 	logger.Info("║    GET /blog/articles/{slug} (get article by slug)")
+	logger.Info("║    GET /blog/images/* (stream public blog image)")
+	logger.Info("║   HEAD /blog/images/* (read public blog image headers)")
 	logger.Info("║    GET /blog/categories (get all categories)")
 	logger.Info("║    GET /blog/tags (get all tags)")
 	logger.Info("║   POST /blog/articles/{id}/feedback (submit feedback)")
@@ -659,4 +664,60 @@ func (c *Controller) UploadImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(ImageUploadResponse{Url: imageUrl})
+}
+
+func (c *Controller) GetImage(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimSpace(chi.URLParam(r, "*"))
+	headOnly := r.Method == http.MethodHead
+
+	image, err := c.service.GetImage(r.Context(), key, headOnly)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidImageKey):
+			http.Error(w, "invalid image key", http.StatusBadRequest)
+		case errors.Is(err, ErrImageNotFound):
+			http.Error(w, "image not found", http.StatusNotFound)
+		default:
+			logger.Error("failed to serve blog image", "key", key, "error", err)
+			http.Error(w, "failed to fetch image", http.StatusBadGateway)
+		}
+		return
+	}
+
+	if image.Body != nil {
+		defer image.Body.Close()
+	}
+
+	setBlogImageHeaders(w, image)
+	w.WriteHeader(http.StatusOK)
+
+	if headOnly || image.Body == nil {
+		return
+	}
+
+	if _, err := io.Copy(w, image.Body); err != nil {
+		logger.Error("failed to stream blog image", "key", key, "error", err)
+	}
+}
+
+func setBlogImageHeaders(w http.ResponseWriter, image *ImageObject) {
+	if image == nil {
+		return
+	}
+
+	contentType := strings.TrimSpace(image.ContentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Content-Length", strconv.FormatInt(image.ContentLength, 10))
+
+	if image.ETag != "" {
+		w.Header().Set("ETag", image.ETag)
+	}
+	if image.LastModified != nil && !image.LastModified.IsZero() {
+		w.Header().Set("Last-Modified", image.LastModified.UTC().Format(http.TimeFormat))
+	}
 }

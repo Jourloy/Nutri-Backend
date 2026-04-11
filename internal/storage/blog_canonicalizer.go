@@ -193,6 +193,39 @@ func (r *BlogImageURLCanonicalizer) RewriteText(raw string) (string, bool) {
 	return rewritten, changed
 }
 
+func (r *BlogImageURLCanonicalizer) BuildCanonicalURL(key string) string {
+	trimmedKey := strings.Trim(strings.TrimSpace(key), "/")
+	if trimmedKey == "" {
+		return ""
+	}
+	return r.buildURL(trimmedKey, "", "")
+}
+
+func (r *BlogImageURLCanonicalizer) ExtractObjectKey(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", false
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", false
+	}
+	if !parsed.IsAbs() {
+		return r.extractBlogImageKeyFromPath(parsed.Path)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	if !r.isKnownHost(parsed.Host) {
+		return "", false
+	}
+
+	return r.extractBlogImageKeyFromPath(parsed.Path)
+}
+
 func (r *BlogImageURLCanonicalizer) buildURL(key, rawQuery, fragment string) string {
 	rewritten := buildPublicURL(r.targetBaseURL.String(), r.targetBucket, path.Join(FolderBlog, key))
 	if rewritten == "" {

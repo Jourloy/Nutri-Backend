@@ -31,6 +31,12 @@ func (f *fakeStorage) Upload(ctx context.Context, folder, key string, body []byt
 }
 
 func (f *fakeStorage) BuildPublicURL(folder, key string) string { return "" }
+func (f *fakeStorage) GetObject(ctx context.Context, folder, key string) (*storage.ObjectReader, error) {
+	return nil, nil
+}
+func (f *fakeStorage) HeadObject(ctx context.Context, folder, key string) (*storage.ObjectInfo, error) {
+	return nil, nil
+}
 
 func TestProcessAndUploadImage_UsesAIFolderAndJPEG(t *testing.T) {
 	t.Parallel()

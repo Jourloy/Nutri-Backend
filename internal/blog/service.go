@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -75,6 +78,20 @@ type Service interface {
 
 	// Image Upload
 	UploadImage(ctx context.Context, imageData []byte, filename string) (string, error)
+	GetImage(ctx context.Context, key string, headOnly bool) (*ImageObject, error)
+}
+
+var (
+	ErrImageNotFound   = errors.New("blog image not found")
+	ErrInvalidImageKey = errors.New("invalid blog image key")
+)
+
+type ImageObject struct {
+	Body          io.ReadCloser
+	ContentType   string
+	ContentLength int64
+	ETag          string
+	LastModified  *time.Time
 }
 
 type service struct {
@@ -86,6 +103,7 @@ type service struct {
 	fallbackProvider ai.AIProvider
 	fallbackName     string
 	urlCanonicalizer *storage.BlogImageURLCanonicalizer
+	imageURLMapper   *blogImageURLMapper
 }
 
 func NewService(repo Repository, storageService storage.Service) (Service, error) {
@@ -94,13 +112,19 @@ func NewService(repo Repository, storageService storage.Service) (Service, error
 		return nil, fmt.Errorf("failed to create blog url canonicalizer: %w", err)
 	}
 
-	return newService(repo, storageService, urlCanonicalizer)
+	imageURLMapper, err := newOptionalBlogImageURLMapper(urlCanonicalizer, lib.Config.MyURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blog image url mapper: %w", err)
+	}
+
+	return newService(repo, storageService, urlCanonicalizer, imageURLMapper)
 }
 
 func newService(
 	repo Repository,
 	storageService storage.Service,
 	urlCanonicalizer *storage.BlogImageURLCanonicalizer,
+	imageURLMapper *blogImageURLMapper,
 ) (Service, error) {
 	logger := log.NewWithOptions(os.Stderr, log.Options{
 		Prefix: "[blog-svc]",
@@ -143,6 +167,7 @@ func newService(
 		fallbackProvider: fallbackProvider,
 		fallbackName:     fallbackName,
 		urlCanonicalizer: urlCanonicalizer,
+		imageURLMapper:   imageURLMapper,
 	}, nil
 }
 
@@ -162,7 +187,12 @@ func NewServiceFromConfig(repo Repository) (Service, error) {
 		return nil, fmt.Errorf("failed to create blog url canonicalizer: %w", err)
 	}
 
-	return newService(repo, storageService, urlCanonicalizer)
+	imageURLMapper, err := newBlogImageURLMapper(urlCanonicalizer, lib.Config.MyURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blog image url mapper: %w", err)
+	}
+
+	return newService(repo, storageService, urlCanonicalizer, imageURLMapper)
 }
 
 // ===== Categories =====
@@ -506,7 +536,53 @@ func (s *service) UploadImage(ctx context.Context, imageData []byte, filename st
 		return "", fmt.Errorf("failed to upload image: %w", err)
 	}
 
+	if s.imageURLMapper != nil {
+		if proxyURL := s.imageURLMapper.BuildProxyURL(objectName, "", ""); proxyURL != "" {
+			return proxyURL, nil
+		}
+	}
+
 	return imageURL, nil
+}
+
+func (s *service) GetImage(ctx context.Context, key string, headOnly bool) (*ImageObject, error) {
+	objectKey, err := normalizeBlogImageKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if headOnly {
+		info, err := s.storage.HeadObject(ctx, storage.FolderBlog, objectKey)
+		if err != nil {
+			if errors.Is(err, storage.ErrObjectNotFound) {
+				return nil, ErrImageNotFound
+			}
+			return nil, fmt.Errorf("failed to read blog image metadata: %w", err)
+		}
+
+		return &ImageObject{
+			ContentType:   info.ContentType,
+			ContentLength: info.ContentLength,
+			ETag:          info.ETag,
+			LastModified:  info.LastModified,
+		}, nil
+	}
+
+	object, err := s.storage.GetObject(ctx, storage.FolderBlog, objectKey)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotFound) {
+			return nil, ErrImageNotFound
+		}
+		return nil, fmt.Errorf("failed to read blog image: %w", err)
+	}
+
+	return &ImageObject{
+		Body:          object.Body,
+		ContentType:   object.ContentType,
+		ContentLength: object.ContentLength,
+		ETag:          object.ETag,
+		LastModified:  object.LastModified,
+	}, nil
 }
 
 // ===== Helpers =====
@@ -738,7 +814,7 @@ func (s *service) loadArticleRelationsInPlace(ctx context.Context, article *Arti
 		article.Tags = []Tag{}
 	}
 
-	s.canonicalizeArticleInPlace(article)
+	s.rewriteArticleForResponseInPlace(article)
 }
 
 func isPublishableStatus(status string) bool {
@@ -811,15 +887,15 @@ func (s *service) normalizeArticleUpdateInput(article *ArticleUpdate) {
 	article.ContentEn = s.canonicalizeHTML(article.ContentEn)
 }
 
-func (s *service) canonicalizeArticleInPlace(article *Article) {
+func (s *service) rewriteArticleForResponseInPlace(article *Article) {
 	if article == nil {
 		return
 	}
 
-	article.PreviewImageUrl = s.canonicalizeOptionalURL(article.PreviewImageUrl)
-	article.OgImageUrl = s.canonicalizeOptionalURL(article.OgImageUrl)
-	article.ContentRu = s.canonicalizeHTML(article.ContentRu)
-	article.ContentEn = s.canonicalizeHTML(article.ContentEn)
+	article.PreviewImageUrl = s.rewriteOptionalURLForDelivery(article.PreviewImageUrl)
+	article.OgImageUrl = s.rewriteOptionalURLForDelivery(article.OgImageUrl)
+	article.ContentRu = s.rewriteHTMLForDelivery(article.ContentRu)
+	article.ContentEn = s.rewriteHTMLForDelivery(article.ContentEn)
 }
 
 func (s *service) canonicalizeOptionalURL(value *string) *string {
@@ -830,6 +906,13 @@ func (s *service) canonicalizeOptionalURL(value *string) *string {
 	trimmed := strings.TrimSpace(*value)
 	if trimmed == "" {
 		return nil
+	}
+	if s.imageURLMapper != nil {
+		rewritten, changed := s.imageURLMapper.RewriteURLForStorage(trimmed)
+		if changed {
+			trimmed = rewritten
+		}
+		return &trimmed
 	}
 	if s.urlCanonicalizer == nil {
 		return &trimmed
@@ -845,7 +928,17 @@ func (s *service) canonicalizeOptionalURL(value *string) *string {
 
 func (s *service) canonicalizeHTML(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || s.urlCanonicalizer == nil {
+	if trimmed == "" {
+		return trimmed
+	}
+	if s.imageURLMapper != nil {
+		rewritten, changed := s.imageURLMapper.RewriteTextForStorage(trimmed)
+		if changed {
+			return rewritten
+		}
+		return trimmed
+	}
+	if s.urlCanonicalizer == nil {
 		return trimmed
 	}
 
@@ -854,4 +947,70 @@ func (s *service) canonicalizeHTML(value string) string {
 		return rewritten
 	}
 	return trimmed
+}
+
+func (s *service) rewriteOptionalURLForDelivery(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	if s.imageURLMapper != nil {
+		rewritten, changed := s.imageURLMapper.RewriteURLForDelivery(trimmed)
+		if changed {
+			trimmed = rewritten
+		}
+		return &trimmed
+	}
+
+	return s.canonicalizeOptionalURL(value)
+}
+
+func (s *service) rewriteHTMLForDelivery(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return trimmed
+	}
+	if s.imageURLMapper != nil {
+		rewritten, changed := s.imageURLMapper.RewriteTextForDelivery(trimmed)
+		if changed {
+			return rewritten
+		}
+		return trimmed
+	}
+
+	return s.canonicalizeHTML(value)
+}
+
+func newOptionalBlogImageURLMapper(
+	urlCanonicalizer *storage.BlogImageURLCanonicalizer,
+	backendBaseURL string,
+) (*blogImageURLMapper, error) {
+	if strings.TrimSpace(backendBaseURL) == "" {
+		return nil, nil
+	}
+	return newBlogImageURLMapper(urlCanonicalizer, backendBaseURL)
+}
+
+func normalizeBlogImageKey(raw string) (string, error) {
+	trimmed := strings.Trim(strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/")), "/")
+	if trimmed == "" {
+		return "", ErrInvalidImageKey
+	}
+
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", ErrInvalidImageKey
+		}
+	}
+
+	cleaned := path.Clean(trimmed)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", ErrInvalidImageKey
+	}
+
+	return cleaned, nil
 }

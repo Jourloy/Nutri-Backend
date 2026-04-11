@@ -3,16 +3,21 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 
 	"github.com/jourloy/somivyn/internal/lib"
 )
@@ -33,15 +38,33 @@ type Config struct {
 	UseSSL        bool
 }
 
+var ErrObjectNotFound = errors.New("storage object not found")
+
+type ObjectInfo struct {
+	ContentType   string
+	ContentLength int64
+	ETag          string
+	LastModified  *time.Time
+}
+
+type ObjectReader struct {
+	Body io.ReadCloser
+	ObjectInfo
+}
+
 type Service interface {
 	EnsureFolder(ctx context.Context, folder string) error
 	Upload(ctx context.Context, folder, key string, body []byte, contentType string) (string, error)
 	BuildPublicURL(folder, key string) string
+	GetObject(ctx context.Context, folder, key string) (*ObjectReader, error)
+	HeadObject(ctx context.Context, folder, key string) (*ObjectInfo, error)
 }
 
 type s3API interface {
 	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 }
 
 type service struct {
@@ -239,6 +262,58 @@ func (s *service) BuildPublicURL(folder, key string) string {
 	return buildPublicURL(s.publicBaseURL, s.bucketName, objectKey)
 }
 
+func (s *service) GetObject(ctx context.Context, folder, key string) (*ObjectReader, error) {
+	objectKey, err := joinObjectKey(folder, key)
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return nil, mapObjectError(err)
+	}
+
+	body := out.Body
+	if body == nil {
+		body = io.NopCloser(bytes.NewReader(nil))
+	}
+
+	return &ObjectReader{
+		Body: body,
+		ObjectInfo: ObjectInfo{
+			ContentType:   strings.TrimSpace(aws.ToString(out.ContentType)),
+			ContentLength: aws.ToInt64(out.ContentLength),
+			ETag:          strings.TrimSpace(aws.ToString(out.ETag)),
+			LastModified:  out.LastModified,
+		},
+	}, nil
+}
+
+func (s *service) HeadObject(ctx context.Context, folder, key string) (*ObjectInfo, error) {
+	objectKey, err := joinObjectKey(folder, key)
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return nil, mapObjectError(err)
+	}
+
+	return &ObjectInfo{
+		ContentType:   strings.TrimSpace(aws.ToString(out.ContentType)),
+		ContentLength: aws.ToInt64(out.ContentLength),
+		ETag:          strings.TrimSpace(aws.ToString(out.ETag)),
+		LastModified:  out.LastModified,
+	}, nil
+}
+
 func buildPublicURL(baseURL, bucketName, objectKey string) string {
 	parsed, err := url.Parse(strings.TrimSuffix(baseURL, "/"))
 	if err != nil {
@@ -272,4 +347,30 @@ func joinObjectKey(folder, key string) (string, error) {
 	}
 
 	return path.Join(folder, trimmedKey), nil
+}
+
+func mapObjectError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var noSuchKey *s3types.NoSuchKey
+	if errors.As(err, &noSuchKey) {
+		return ErrObjectNotFound
+	}
+
+	var notFound *s3types.NotFound
+	if errors.As(err, &notFound) {
+		return ErrObjectNotFound
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch strings.TrimSpace(apiErr.ErrorCode()) {
+		case "NoSuchKey", "NotFound", "404":
+			return ErrObjectNotFound
+		}
+	}
+
+	return err
 }

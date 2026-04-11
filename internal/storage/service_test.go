@@ -1,8 +1,12 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -13,6 +17,12 @@ type fakeS3Client struct {
 	listOutputs []*s3.ListObjectsV2Output
 	listCalls   int
 	putInputs   []*s3.PutObjectInput
+	getOutput   *s3.GetObjectOutput
+	getErr      error
+	getInput    *s3.GetObjectInput
+	headOutput  *s3.HeadObjectOutput
+	headErr     error
+	headInput   *s3.HeadObjectInput
 }
 
 func (f *fakeS3Client) ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
@@ -27,6 +37,28 @@ func (f *fakeS3Client) ListObjectsV2(ctx context.Context, params *s3.ListObjects
 func (f *fakeS3Client) PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	f.putInputs = append(f.putInputs, params)
 	return &s3.PutObjectOutput{}, nil
+}
+
+func (f *fakeS3Client) GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	f.getInput = params
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if f.getOutput != nil {
+		return f.getOutput, nil
+	}
+	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(nil))}, nil
+}
+
+func (f *fakeS3Client) HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	f.headInput = params
+	if f.headErr != nil {
+		return nil, f.headErr
+	}
+	if f.headOutput != nil {
+		return f.headOutput, nil
+	}
+	return &s3.HeadObjectOutput{}, nil
 }
 
 func TestNormalizeBaseURL(t *testing.T) {
@@ -214,5 +246,109 @@ func TestUploadReturnsPathStyleURL(t *testing.T) {
 	}
 	if got := aws.ToString(client.putInputs[1].Key); got != "blog/2026/03/file.jpg" {
 		t.Fatalf("object key = %q, want %q", got, "blog/2026/03/file.jpg")
+	}
+}
+
+func TestGetObjectReturnsBodyAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	modifiedAt := time.Now().UTC().Truncate(time.Second)
+	client := &fakeS3Client{
+		getOutput: &s3.GetObjectOutput{
+			Body:          io.NopCloser(bytes.NewReader([]byte("image-bytes"))),
+			ContentType:   aws.String("image/png"),
+			ContentLength: aws.Int64(11),
+			ETag:          aws.String(`"etag-1"`),
+			LastModified:  &modifiedAt,
+		},
+	}
+	svc, err := newService(client, "somivyn-images", "https://cdn.example.com")
+	if err != nil {
+		t.Fatalf("newService() error = %v", err)
+	}
+
+	object, err := svc.GetObject(context.Background(), FolderBlog, "2026/03/file.png")
+	if err != nil {
+		t.Fatalf("GetObject() error = %v", err)
+	}
+	defer object.Body.Close()
+
+	body, err := io.ReadAll(object.Body)
+	if err != nil {
+		t.Fatalf("io.ReadAll() error = %v", err)
+	}
+	if string(body) != "image-bytes" {
+		t.Fatalf("body = %q", string(body))
+	}
+	if object.ContentType != "image/png" {
+		t.Fatalf("contentType = %q", object.ContentType)
+	}
+	if object.ContentLength != 11 {
+		t.Fatalf("contentLength = %d", object.ContentLength)
+	}
+	if object.ETag != `"etag-1"` {
+		t.Fatalf("etag = %q", object.ETag)
+	}
+	if object.LastModified == nil || !object.LastModified.Equal(modifiedAt) {
+		t.Fatalf("lastModified = %#v", object.LastModified)
+	}
+	if got := aws.ToString(client.getInput.Key); got != "blog/2026/03/file.png" {
+		t.Fatalf("object key = %q", got)
+	}
+}
+
+func TestHeadObjectReturnsMetadata(t *testing.T) {
+	t.Parallel()
+
+	modifiedAt := time.Now().UTC().Truncate(time.Second)
+	client := &fakeS3Client{
+		headOutput: &s3.HeadObjectOutput{
+			ContentType:   aws.String("image/webp"),
+			ContentLength: aws.Int64(27),
+			ETag:          aws.String(`"etag-2"`),
+			LastModified:  &modifiedAt,
+		},
+	}
+	svc, err := newService(client, "somivyn-images", "https://cdn.example.com")
+	if err != nil {
+		t.Fatalf("newService() error = %v", err)
+	}
+
+	object, err := svc.HeadObject(context.Background(), FolderBlog, "2026/03/file.webp")
+	if err != nil {
+		t.Fatalf("HeadObject() error = %v", err)
+	}
+
+	if object.ContentType != "image/webp" {
+		t.Fatalf("contentType = %q", object.ContentType)
+	}
+	if object.ContentLength != 27 {
+		t.Fatalf("contentLength = %d", object.ContentLength)
+	}
+	if object.ETag != `"etag-2"` {
+		t.Fatalf("etag = %q", object.ETag)
+	}
+	if object.LastModified == nil || !object.LastModified.Equal(modifiedAt) {
+		t.Fatalf("lastModified = %#v", object.LastModified)
+	}
+	if got := aws.ToString(client.headInput.Key); got != "blog/2026/03/file.webp" {
+		t.Fatalf("object key = %q", got)
+	}
+}
+
+func TestGetObjectMapsNotFound(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeS3Client{
+		getErr: &types.NoSuchKey{},
+	}
+	svc, err := newService(client, "somivyn-images", "https://cdn.example.com")
+	if err != nil {
+		t.Fatalf("newService() error = %v", err)
+	}
+
+	_, err = svc.GetObject(context.Background(), FolderBlog, "missing.png")
+	if !errors.Is(err, ErrObjectNotFound) {
+		t.Fatalf("expected ErrObjectNotFound, got %v", err)
 	}
 }

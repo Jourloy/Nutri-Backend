@@ -27,12 +27,31 @@ func (f *fakeStorage) Upload(ctx context.Context, folder, key string, body []byt
 }
 
 func (f *fakeStorage) BuildPublicURL(folder, key string) string { return "" }
+func (f *fakeStorage) GetObject(ctx context.Context, folder, key string) (*storage.ObjectReader, error) {
+	return nil, nil
+}
+func (f *fakeStorage) HeadObject(ctx context.Context, folder, key string) (*storage.ObjectInfo, error) {
+	return nil, nil
+}
 
 func TestUploadImage_UsesBlogFolderAndContentType(t *testing.T) {
 	t.Parallel()
 
 	storageFake := &fakeStorage{url: "https://cdn.example.com/somivyn-images/blog/2026/03/cover.png"}
-	svc := &service{storage: storageFake}
+	urlCanonicalizer, err := storage.NewBlogImageURLCanonicalizer(storage.Config{
+		Endpoint:      "https://internal.example.com",
+		PublicBaseURL: "https://cdn.example.com",
+		BucketName:    "somivyn-images",
+		UseSSL:        true,
+	})
+	if err != nil {
+		t.Fatalf("NewBlogImageURLCanonicalizer() error = %v", err)
+	}
+	imageURLMapper, err := newBlogImageURLMapper(urlCanonicalizer, "https://api.example.com")
+	if err != nil {
+		t.Fatalf("newBlogImageURLMapper() error = %v", err)
+	}
+	svc := &service{storage: storageFake, imageURLMapper: imageURLMapper}
 
 	payload := []byte("png-bytes")
 	gotURL, err := svc.UploadImage(context.Background(), payload, "cover.png")
@@ -40,8 +59,8 @@ func TestUploadImage_UsesBlogFolderAndContentType(t *testing.T) {
 		t.Fatalf("UploadImage() error = %v", err)
 	}
 
-	if gotURL != storageFake.url {
-		t.Fatalf("url = %q, want %q", gotURL, storageFake.url)
+	if matched := regexp.MustCompile(`^https://api\.example\.com/api/v1/blog/images/\d{4}/\d{2}/[0-9a-f-]+\.png$`).MatchString(gotURL); !matched {
+		t.Fatalf("unexpected proxy url %q", gotURL)
 	}
 	if storageFake.folder != storage.FolderBlog {
 		t.Fatalf("folder = %q, want %q", storageFake.folder, storage.FolderBlog)

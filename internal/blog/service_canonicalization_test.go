@@ -28,6 +28,14 @@ func (s *canonicalStorage) BuildPublicURL(folder, key string) string {
 	return baseURL + "/" + strings.Trim(s.bucketName, "/") + "/" + folder + "/" + strings.Trim(key, "/")
 }
 
+func (s *canonicalStorage) GetObject(ctx context.Context, folder, key string) (*storage.ObjectReader, error) {
+	return nil, nil
+}
+
+func (s *canonicalStorage) HeadObject(ctx context.Context, folder, key string) (*storage.ObjectInfo, error) {
+	return nil, nil
+}
+
 type stubRepository struct {
 	createArticleInput *ArticleCreate
 	updateArticleInput *ArticleUpdate
@@ -195,12 +203,17 @@ func newTestService(t *testing.T, repo *stubRepository) *service {
 	if err != nil {
 		t.Fatalf("NewBlogImageURLCanonicalizerFromService() error = %v", err)
 	}
+	imageURLMapper, err := newBlogImageURLMapper(urlCanonicalizer, "https://api.example.com")
+	if err != nil {
+		t.Fatalf("newBlogImageURLMapper() error = %v", err)
+	}
 
 	return &service{
 		repo:             repo,
 		storage:          storageFake,
 		logger:           log.NewWithOptions(io.Discard, log.Options{}),
 		urlCanonicalizer: urlCanonicalizer,
+		imageURLMapper:   imageURLMapper,
 	}
 }
 
@@ -242,7 +255,7 @@ func TestCreateArticleCanonicalizesBlogImageFieldsBeforeSaving(t *testing.T) {
 	if got := repo.createArticleInput.ContentEn; got != `<p><img src="https://cdn.example.com/storage/somivyn-images/blog/2026/03/body-en.png" /></p>` {
 		t.Fatalf("contentEn = %q", got)
 	}
-	if article.PreviewImageUrl == nil || *article.PreviewImageUrl != "https://cdn.example.com/storage/somivyn-images/blog/2026/03/preview.png" {
+	if article.PreviewImageUrl == nil || *article.PreviewImageUrl != "https://api.example.com/api/v1/blog/images/2026/03/preview.png" {
 		t.Fatalf("response previewImageUrl = %#v", article.PreviewImageUrl)
 	}
 }
@@ -312,10 +325,10 @@ func TestGetArticleByIdCanonicalizesAdminResponse(t *testing.T) {
 		t.Fatalf("GetArticleById() error = %v", err)
 	}
 
-	if article.PreviewImageUrl == nil || *article.PreviewImageUrl != "https://cdn.example.com/storage/somivyn-images/blog/2026/03/preview.png" {
+	if article.PreviewImageUrl == nil || *article.PreviewImageUrl != "https://api.example.com/api/v1/blog/images/2026/03/preview.png" {
 		t.Fatalf("previewImageUrl = %#v", article.PreviewImageUrl)
 	}
-	if article.ContentRu != `<p><img src="https://cdn.example.com/storage/somivyn-images/blog/2026/03/body.png" /></p>` {
+	if article.ContentRu != `<p><img src="https://api.example.com/api/v1/blog/images/2026/03/body.png" /></p>` {
 		t.Fatalf("contentRu = %q", article.ContentRu)
 	}
 }
@@ -352,7 +365,7 @@ func TestGetAllArticlesCanonicalizesAdminListResponse(t *testing.T) {
 		t.Fatalf("GetAllArticles() error = %v", err)
 	}
 
-	if got := *response.Articles[0].PreviewImageUrl; got != "https://cdn.example.com/storage/somivyn-images/blog/2026/03/preview.png" {
+	if got := *response.Articles[0].PreviewImageUrl; got != "https://api.example.com/api/v1/blog/images/2026/03/preview.png" {
 		t.Fatalf("previewImageUrl = %q", got)
 	}
 }
@@ -382,10 +395,10 @@ func TestGetPublicArticleBySlugCanonicalizesPublicResponse(t *testing.T) {
 		t.Fatalf("GetPublicArticleBySlug() error = %v", err)
 	}
 
-	if article.PreviewImageUrl == nil || *article.PreviewImageUrl != "https://cdn.example.com/storage/somivyn-images/blog/2026/03/preview.png" {
+	if article.PreviewImageUrl == nil || *article.PreviewImageUrl != "https://api.example.com/api/v1/blog/images/2026/03/preview.png" {
 		t.Fatalf("previewImageUrl = %#v", article.PreviewImageUrl)
 	}
-	if article.ContentRu != `<p><img src="https://cdn.example.com/storage/somivyn-images/blog/2026/03/body.png" /></p>` {
+	if article.ContentRu != `<p><img src="https://api.example.com/api/v1/blog/images/2026/03/body.png" /></p>` {
 		t.Fatalf("contentRu = %q", article.ContentRu)
 	}
 }
