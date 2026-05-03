@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jourloy/somivyn/internal/ai"
+	"github.com/jourloy/nutri02/internal/ai"
 )
 
 type prepareRepoStub struct {

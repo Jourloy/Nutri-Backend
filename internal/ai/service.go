@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nfnt/resize"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 type Service interface {

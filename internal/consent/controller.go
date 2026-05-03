@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/nutri02/internal/auth"
 )
 
 var (
@@ -30,11 +30,13 @@ func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/consent", func(r chi.Router) {
 		r.Post("/", c.RecordConsent)
 		r.Get("/latest", c.GetLatestConsent)
+		r.Get("/status", c.GetConsentStatus)
 	})
 
 	logger.Info("╔═════ Consent")
 	logger.Info("║   POST /  (public)")
 	logger.Info("║    GET /latest  (authenticated)")
+	logger.Info("║    GET /status  (authenticated)")
 	logger.Info("╚═════")
 }
 
@@ -81,6 +83,9 @@ func (c *Controller) RecordConsent(w http.ResponseWriter, r *http.Request) {
 		userAgent,
 		req.ConsentGiven,
 		req.ConsentType,
+		req.DocumentVersion,
+		req.Locale,
+		req.Source,
 	)
 	if err != nil {
 		logger.Error("Failed to record consent", "error", err)
@@ -96,6 +101,30 @@ func (c *Controller) RecordConsent(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (c *Controller) GetConsentStatus(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	records, err := c.service.GetConsentStatus(r.Context(), user.Id)
+	if err != nil {
+		logger.Error("Failed to get consent status", "error", err)
+		http.Error(w, "failed to get consent status", http.StatusInternalServerError)
+		return
+	}
+
+	response := ConsentStatusResponse{
+		Success: true,
+		Records: records,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(response)
 }
 

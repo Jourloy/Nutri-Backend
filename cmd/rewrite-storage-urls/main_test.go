@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 type execCall struct {
@@ -84,14 +84,14 @@ func TestRewriteAllBlogScopeOnlyReturnsBlogSummary(t *testing.T) {
 	executor := &fakeExecutor{
 		urlRowsByColumn: map[string][]stringRow{
 			"blog_articles.preview_image_url": {
-				{ID: 1, Value: sql.NullString{String: "/somivyn-blog-images/2026/03/preview.png", Valid: true}},
+				{ID: 1, Value: sql.NullString{String: "/nutri02-blog-images/2026/03/preview.png", Valid: true}},
 			},
 			"blog_articles.og_image_url": {
-				{ID: 2, Value: sql.NullString{String: "https://api.somivyn.com/somivyn-blog-images/2026/03/og.png", Valid: true}},
+				{ID: 2, Value: sql.NullString{String: "https://api.nutri02.com/nutri02-blog-images/2026/03/og.png", Valid: true}},
 			},
 		},
 		blogRows: []blogContentRow{
-			{ID: 3, ContentRu: `<p><img src="/somivyn-blog-images/2026/03/body.png" /></p>`, ContentEn: `<p>EN</p>`},
+			{ID: 3, ContentRu: `<p><img src="/nutri02-blog-images/2026/03/body.png" /></p>`, ContentEn: `<p>EN</p>`},
 		},
 	}
 
@@ -131,17 +131,17 @@ func TestRewriteAllBlogScopeAppliesCanonicalBlogUpdates(t *testing.T) {
 	executor := &fakeExecutor{
 		urlRowsByColumn: map[string][]stringRow{
 			"blog_articles.preview_image_url": {
-				{ID: 1, Value: sql.NullString{String: "/somivyn-blog-images/2026/03/preview.png", Valid: true}},
+				{ID: 1, Value: sql.NullString{String: "/nutri02-blog-images/2026/03/preview.png", Valid: true}},
 			},
 			"blog_articles.og_image_url": {
-				{ID: 2, Value: sql.NullString{String: "https://minio.jourloy.com/somivyn-blog-images/2026/03/og.png", Valid: true}},
+				{ID: 2, Value: sql.NullString{String: "https://minio.jourloy.com/nutri02-blog-images/2026/03/og.png", Valid: true}},
 			},
 		},
 		blogRows: []blogContentRow{
 			{
 				ID:        3,
-				ContentRu: `<p><img src="/somivyn-blog-images/2026/03/body-ru.png" /></p>`,
-				ContentEn: `<p><img src="https://api.somivyn.com/somivyn-blog-images/2026/03/body-en.png" /></p>`,
+				ContentRu: `<p><img src="/nutri02-blog-images/2026/03/body-ru.png" /></p>`,
+				ContentEn: `<p><img src="https://api.nutri02.com/nutri02-blog-images/2026/03/body-en.png" /></p>`,
 			},
 		},
 	}
@@ -190,16 +190,16 @@ func TestRewriteAllRecipeScopeOnlyReturnsRecipeSummary(t *testing.T) {
 	executor := &fakeExecutor{
 		urlRowsByColumn: map[string][]stringRow{
 			"recipe_books.og_image_url": {
-				{ID: 1, Value: sql.NullString{String: "/somivyn-recipe-images/2026/03/book.webp", Valid: true}},
+				{ID: 1, Value: sql.NullString{String: "/nutri02-recipe-images/2026/03/book.webp", Valid: true}},
 			},
 			"recipes.main_image_url": {
-				{ID: 2, Value: sql.NullString{String: "https://api.somivyn.com/somivyn-recipe-images/2026/03/main.webp", Valid: true}},
+				{ID: 2, Value: sql.NullString{String: "https://api.nutri02.com/nutri02-recipe-images/2026/03/main.webp", Valid: true}},
 			},
 			"recipes.og_image_url": {
-				{ID: 3, Value: sql.NullString{String: "https://minio.jourloy.com/somivyn-recipe-images/2026/03/og.webp", Valid: true}},
+				{ID: 3, Value: sql.NullString{String: "https://minio.jourloy.com/nutri02-recipe-images/2026/03/og.webp", Valid: true}},
 			},
 			"recipe_steps.image_url": {
-				{ID: 4, Value: sql.NullString{String: "https://s3.somivyn.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/recipe/2026/03/step.webp", Valid: true}},
+				{ID: 4, Value: sql.NullString{String: "https://s3.nutri02.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/recipe/2026/03/step.webp", Valid: true}},
 			},
 			"recipe_images.image_url": {
 				{ID: 5, Value: sql.NullString{String: "https://cdn.example.com/storage/somivyn-images/recipe/2026/03/extra.webp", Valid: true}},
@@ -232,16 +232,16 @@ func TestRewriteAllRecipeScopeAppliesCanonicalRecipeUpdates(t *testing.T) {
 	executor := &fakeExecutor{
 		urlRowsByColumn: map[string][]stringRow{
 			"recipe_books.og_image_url": {
-				{ID: 1, Value: sql.NullString{String: "/somivyn-recipe-images/2026/03/book.webp", Valid: true}},
+				{ID: 1, Value: sql.NullString{String: "/nutri02-recipe-images/2026/03/book.webp", Valid: true}},
 			},
 			"recipes.main_image_url": {
-				{ID: 2, Value: sql.NullString{String: "https://api.somivyn.com/somivyn-recipe-images/2026/03/main.webp", Valid: true}},
+				{ID: 2, Value: sql.NullString{String: "https://api.nutri02.com/nutri02-recipe-images/2026/03/main.webp", Valid: true}},
 			},
 			"recipes.og_image_url": {
-				{ID: 3, Value: sql.NullString{String: "https://minio.jourloy.com/somivyn-recipe-images/2026/03/og.webp", Valid: true}},
+				{ID: 3, Value: sql.NullString{String: "https://minio.jourloy.com/nutri02-recipe-images/2026/03/og.webp", Valid: true}},
 			},
 			"recipe_steps.image_url": {
-				{ID: 4, Value: sql.NullString{String: "https://s3.somivyn.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/recipe/2026/03/step.webp", Valid: true}},
+				{ID: 4, Value: sql.NullString{String: "https://s3.nutri02.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/recipe/2026/03/step.webp", Valid: true}},
 			},
 			"recipe_images.image_url": {
 				{ID: 5, Value: sql.NullString{String: "https://cdn.example.com/storage/somivyn-images/recipe/2026/03/extra.webp", Valid: true}},

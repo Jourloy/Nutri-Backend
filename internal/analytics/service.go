@@ -6,11 +6,11 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"github.com/jourloy/somivyn/internal/database"
+	"github.com/jourloy/nutri02/internal/database"
 )
 
 type Service interface {
-    GetSeries(ctx context.Context, userId string, end time.Time, days int) (*SeriesResponse, error)
+	GetSeries(ctx context.Context, userId string, end time.Time, days int) (*SeriesResponse, error)
 }
 
 type service struct{ db *sqlx.DB }

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 type fakeStorage struct {

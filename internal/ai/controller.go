@@ -13,8 +13,9 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/internal/middlewares"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/consent"
+	"github.com/jourloy/nutri02/internal/middlewares"
 )
 
 var (
@@ -42,15 +43,19 @@ func NewController() (*Controller, error) {
 
 func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/ai", func(r chi.Router) {
-		// Food analysis
-		r.Post("/analyze-food", c.AnalyzeFoodImage)
-		r.Post("/analyze-food-text", c.AnalyzeFoodByText)
-		r.Post("/analyze-nutrients", c.AnalyzeNutrients)
-		r.Get("/analysis-history", c.GetAnalysisHistory)
-		r.Get("/analysis/{id}", c.GetAnalysisById)
+		r.Group(func(r chi.Router) {
+			r.Use(middlewares.RequireConsent(consent.TypeSpecialCategoryHealth))
 
-		// Limits
-		r.Get("/limit-status", c.GetLimitStatus)
+			// Food analysis
+			r.Post("/analyze-food", c.AnalyzeFoodImage)
+			r.Post("/analyze-food-text", c.AnalyzeFoodByText)
+			r.Post("/analyze-nutrients", c.AnalyzeNutrients)
+			r.Get("/analysis-history", c.GetAnalysisHistory)
+			r.Get("/analysis/{id}", c.GetAnalysisById)
+
+			// Limits
+			r.Get("/limit-status", c.GetLimitStatus)
+		})
 
 		// Admin tools
 		r.Group(func(r chi.Router) {

@@ -9,6 +9,8 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/jourloy/nutri02/internal/database"
 )
 
 var (
@@ -65,24 +67,36 @@ type updateLocaleRequest struct {
 	Locale string `json:"locale"`
 }
 
-func (c *Controller) setAuthCookies(w http.ResponseWriter, access, refresh string) {
-	secure := true
-	http.SetCookie(w, &http.Cookie{
-		Name:     "jwt",
-		Value:    access,
-		Path:     "/",
-		SameSite: http.SameSiteNoneMode,
-		HttpOnly: true,
-		Secure:   secure,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refresh,
-		Path:     "/api/v1/auth/refresh",
-		SameSite: http.SameSiteNoneMode,
-		HttpOnly: true,
-		Secure:   secure,
-	})
+func extractIP(r *http.Request) string {
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return ip
+	}
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
+func recordRegistrationConsent(ctx context.Context, userId string, ipAddress string, userAgent string, documentVersion string, locale string) error {
+	documentVersion = strings.TrimSpace(documentVersion)
+	if documentVersion == "" {
+		documentVersion = "2026-05-01"
+	}
+
+	locale = strings.ToLower(strings.TrimSpace(locale))
+	if locale != "ru" && locale != "en" {
+		locale = "ru"
+	}
+
+	const q = `
+		INSERT INTO consent_records (
+			user_id, ip_address, user_agent, consent_given, consent_type,
+			document_version, locale, source
+		)
+		VALUES ($1, $2, $3, TRUE, 'personal_data_processing', $4, $5, 'registration');`
+
+	_, err := database.Database.ExecContext(ctx, q, userId, ipAddress, userAgent, documentVersion, locale)
+	return err
 }
 
 func (c *Controller) Register(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +113,20 @@ func (c *Controller) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.setAuthCookies(w, resp.AccessToken, resp.RefreshToken)
+	if err := recordRegistrationConsent(
+		r.Context(),
+		resp.User.Id,
+		extractIP(r),
+		r.UserAgent(),
+		u.PersonalDataConsentVersion,
+		u.Locale,
+	); err != nil {
+		logger.Error("Error recording registration consent", "error", err)
+		http.Error(w, "failed to record consent", http.StatusInternalServerError)
+		return
+	}
+
+	SetAuthCookies(w, r, resp.AccessToken, resp.RefreshToken)
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -118,7 +145,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.setAuthCookies(w, resp.AccessToken, resp.RefreshToken)
+	SetAuthCookies(w, r, resp.AccessToken, resp.RefreshToken)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -139,7 +166,7 @@ func (c *Controller) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// переустанавливаем обе куки (ротация refresh — хорошая практика)
-	c.setAuthCookies(w, resp.AccessToken, resp.RefreshToken)
+	SetAuthCookies(w, r, resp.AccessToken, resp.RefreshToken)
 
 	// можно ничего не возвращать, но удобно вернуть пользователя и новые токены
 	w.WriteHeader(http.StatusOK)
@@ -190,7 +217,7 @@ func (c *Controller) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.setAuthCookies(w, "", "")
+	ClearAuthCookies(w, r)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -208,7 +235,7 @@ func (c *Controller) DeleteMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.setAuthCookies(w, "", "")
+	ClearAuthCookies(w, r)
 	w.WriteHeader(http.StatusOK)
 }
 

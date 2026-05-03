@@ -12,7 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 type queryExecutor interface {

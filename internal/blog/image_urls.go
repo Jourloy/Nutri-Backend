@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 const blogImageProxyPathPrefix = "/api/v1/blog/images"
@@ -52,7 +52,7 @@ func newBlogImageURLMapper(
 		canonicalizer: canonicalizer,
 		proxyBaseURL:  parsed,
 		textPattern: regexp.MustCompile(
-			`https?://[^\s"'<>)]+|/(?:somivyn|nutri)-blog-images/[^\s"'<>)]+`,
+			`https?://[^\s"'<>)]+|/(?:nutri02|somivyn|nutri)-blog-images/[^\s"'<>)]+`,
 		),
 	}, nil
 }

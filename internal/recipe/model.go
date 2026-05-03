@@ -98,16 +98,16 @@ type TagUpdate struct {
 // ===== Recipe =====
 
 type Recipe struct {
-	Id           int64      `json:"id" db:"id"`
-	BookId       int64      `json:"bookId" db:"book_id"`
-	UserId       *string    `json:"userId,omitempty" db:"user_id"`
-	Slug         *string    `json:"slug,omitempty" db:"slug"`
-	TitleRu      string     `json:"titleRu" db:"title_ru"`
-	TitleEn      *string    `json:"titleEn,omitempty" db:"title_en"`
-	DescriptionRu *string   `json:"descriptionRu,omitempty" db:"description_ru"`
-	DescriptionEn *string   `json:"descriptionEn,omitempty" db:"description_en"`
-	MainImageUrl *string    `json:"mainImageUrl,omitempty" db:"main_image_url"`
-	ExternalUrl  *string    `json:"externalUrl,omitempty" db:"external_url"`
+	Id            int64   `json:"id" db:"id"`
+	BookId        int64   `json:"bookId" db:"book_id"`
+	UserId        *string `json:"userId,omitempty" db:"user_id"`
+	Slug          *string `json:"slug,omitempty" db:"slug"`
+	TitleRu       string  `json:"titleRu" db:"title_ru"`
+	TitleEn       *string `json:"titleEn,omitempty" db:"title_en"`
+	DescriptionRu *string `json:"descriptionRu,omitempty" db:"description_ru"`
+	DescriptionEn *string `json:"descriptionEn,omitempty" db:"description_en"`
+	MainImageUrl  *string `json:"mainImageUrl,omitempty" db:"main_image_url"`
+	ExternalUrl   *string `json:"externalUrl,omitempty" db:"external_url"`
 
 	// Timing
 	PrepTime  *int `json:"prepTime,omitempty" db:"prep_time"`

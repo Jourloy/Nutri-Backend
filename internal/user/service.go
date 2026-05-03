@@ -3,7 +3,7 @@ package user
 import (
 	"context"
 
-	"github.com/jourloy/somivyn/internal/email"
+	"github.com/jourloy/nutri02/internal/email"
 )
 
 type Service interface {

@@ -122,15 +122,13 @@ func ParseENV() error {
 	if env, exist := os.LookupEnv("MY_URL"); exist {
 		Config.MyURL = env
 	} else {
-		logger.Error("cannot find env MY_URL")
-		return errors.New("cannot find env MY_URL")
+		Config.MyURL = "https://api.nutri02.com"
 	}
 
 	if env, exist := os.LookupEnv("FRONT_URL"); exist {
 		Config.FrontURL = env
 	} else {
-		logger.Error("cannot find env FRONT_URL")
-		return errors.New("cannot find env FRONT_URL")
+		Config.FrontURL = "https://nutri02.com"
 	}
 
 	if env, exist := os.LookupEnv("TELEGRAM_TOKEN"); exist {
@@ -205,6 +203,8 @@ func ParseENV() error {
 
 	if env, exist := os.LookupEnv("S3_PUBLIC_BASE_URL"); exist {
 		Config.S3PublicBaseURL = env
+	} else {
+		Config.S3PublicBaseURL = "https://s3.nutri02.com"
 	}
 
 	if env, exist := os.LookupEnv("S3_ACCESS_KEY"); exist {

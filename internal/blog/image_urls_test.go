@@ -3,7 +3,7 @@ package blog
 import (
 	"testing"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 func newTestBlogImageURLMapper(t *testing.T) *blogImageURLMapper {
@@ -46,7 +46,7 @@ func TestBlogImageURLMapperRewriteURLForStorage(t *testing.T) {
 		},
 		{
 			name:    "api alias becomes canonical s3",
-			input:   "https://api.somivyn.com/somivyn-blog-images/2026/03/cover.png",
+			input:   "https://api.nutri02.com/nutri02-blog-images/2026/03/cover.png",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
 			changed: true,
 		},
@@ -93,13 +93,13 @@ func TestBlogImageURLMapperRewriteURLForDelivery(t *testing.T) {
 	}{
 		{
 			name:    "relative alias becomes proxy",
-			input:   "/somivyn-blog-images/2026/03/cover.png?size=lg#hero",
+			input:   "/nutri02-blog-images/2026/03/cover.png?size=lg#hero",
 			want:    "https://api.example.com/api/v1/blog/images/2026/03/cover.png?size=lg#hero",
 			changed: true,
 		},
 		{
 			name:    "legacy minio alias becomes proxy",
-			input:   "https://minio.jourloy.com/somivyn-blog-images/2026/03/cover.png",
+			input:   "https://minio.jourloy.com/nutri02-blog-images/2026/03/cover.png",
 			want:    "https://api.example.com/api/v1/blog/images/2026/03/cover.png",
 			changed: true,
 		},

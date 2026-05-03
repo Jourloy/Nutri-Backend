@@ -9,7 +9,9 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/consent"
+	"github.com/jourloy/nutri02/internal/middlewares"
 )
 
 var (
@@ -30,10 +32,10 @@ func NewController() *Controller {
 
 func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/tickets", func(r chi.Router) {
-		r.Post("/", c.CreateTicket)
+		r.With(middlewares.RequireConsent(consent.TypePersonalDataProcessing)).Post("/", c.CreateTicket)
 		r.Get("/", c.GetUserTickets)
 		r.Get("/{id}", c.GetTicket)
-		r.Post("/{id}/messages", c.AddMessage)
+		r.With(middlewares.RequireConsent(consent.TypePersonalDataProcessing)).Post("/{id}/messages", c.AddMessage)
 		r.Post("/{id}/close", c.CloseTicket)
 	})
 
@@ -190,10 +192,27 @@ func (c *Controller) AddMessage(w http.ResponseWriter, r *http.Request) {
 
 // CloseTicket закрывает тикет
 func (c *Controller) CloseTicket(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, `{"error": "invalid ticket id"}`, http.StatusBadRequest)
+		return
+	}
+
+	ticket, err := c.service.GetTicket(r.Context(), id, user.Id, user.IsAdmin)
+	if err != nil {
+		logger.Error("Error getting ticket", "error", err)
+		http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	if ticket == nil {
+		http.Error(w, `{"error": "ticket not found"}`, http.StatusNotFound)
 		return
 	}
 

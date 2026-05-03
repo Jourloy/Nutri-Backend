@@ -3,57 +3,57 @@ package telegram
 import "context"
 
 type Service interface {
-    CreateTicket(ctx context.Context, userId string) (*TelegramProfile, error)
-    LinkByToken(ctx context.Context, in LinkRequest) (*TelegramProfile, error)
-    GetByUserId(ctx context.Context, userId string) (*TelegramProfile, error)
-    GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error)
-    GetPublicByUserId(ctx context.Context, userId string) (*TelegramPublic, error)
-    DeleteByUserId(ctx context.Context, userId string) error
-    UpdateNotifyByUserId(ctx context.Context, userId string, upd NotifyUpdate) (*TelegramProfile, error)
-    GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error)
-    UpdateLastDailyReminder(ctx context.Context, telegramId string) error
+	CreateTicket(ctx context.Context, userId string) (*TelegramProfile, error)
+	LinkByToken(ctx context.Context, in LinkRequest) (*TelegramProfile, error)
+	GetByUserId(ctx context.Context, userId string) (*TelegramProfile, error)
+	GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error)
+	GetPublicByUserId(ctx context.Context, userId string) (*TelegramPublic, error)
+	DeleteByUserId(ctx context.Context, userId string) error
+	UpdateNotifyByUserId(ctx context.Context, userId string, upd NotifyUpdate) (*TelegramProfile, error)
+	GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error)
+	UpdateLastDailyReminder(ctx context.Context, telegramId string) error
 }
 
 type service struct {
-    repo Repository
+	repo Repository
 }
 
 func NewService() Service {
-    return &service{repo: NewRepository()}
+	return &service{repo: NewRepository()}
 }
 
 func (s *service) CreateTicket(ctx context.Context, userId string) (*TelegramProfile, error) {
-    return s.repo.CreateOrGetTicket(ctx, userId)
+	return s.repo.CreateOrGetTicket(ctx, userId)
 }
 
 func (s *service) LinkByToken(ctx context.Context, in LinkRequest) (*TelegramProfile, error) {
-    return s.repo.LinkByToken(ctx, in)
+	return s.repo.LinkByToken(ctx, in)
 }
 
 func (s *service) GetByUserId(ctx context.Context, userId string) (*TelegramProfile, error) {
-    return s.repo.GetByUserId(ctx, userId)
+	return s.repo.GetByUserId(ctx, userId)
 }
 
 func (s *service) GetPublicByUserId(ctx context.Context, userId string) (*TelegramPublic, error) {
-    return s.repo.GetPublicByUserId(ctx, userId)
+	return s.repo.GetPublicByUserId(ctx, userId)
 }
 
 func (s *service) DeleteByUserId(ctx context.Context, userId string) error {
-    return s.repo.DeleteByUserId(ctx, userId)
+	return s.repo.DeleteByUserId(ctx, userId)
 }
 
 func (s *service) UpdateNotifyByUserId(ctx context.Context, userId string, upd NotifyUpdate) (*TelegramProfile, error) {
-    return s.repo.UpdateNotifyByUserId(ctx, userId, upd)
+	return s.repo.UpdateNotifyByUserId(ctx, userId, upd)
 }
 
 func (s *service) GetByTelegramId(ctx context.Context, telegramId string) (*TelegramProfile, error) {
-    return s.repo.GetByTelegramId(ctx, telegramId)
+	return s.repo.GetByTelegramId(ctx, telegramId)
 }
 
 func (s *service) GetAllForDailyNotify(ctx context.Context) ([]TelegramProfileWithUser, error) {
-    return s.repo.GetAllForDailyNotify(ctx)
+	return s.repo.GetAllForDailyNotify(ctx)
 }
 
 func (s *service) UpdateLastDailyReminder(ctx context.Context, telegramId string) error {
-    return s.repo.UpdateLastDailyReminder(ctx, telegramId)
+	return s.repo.UpdateLastDailyReminder(ctx, telegramId)
 }

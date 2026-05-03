@@ -9,7 +9,9 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/consent"
+	"github.com/jourloy/nutri02/internal/middlewares"
 )
 
 var (
@@ -32,7 +34,7 @@ func NewController() *Controller {
 func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/feedback", func(r chi.Router) {
 		r.Get("/status", c.GetStatus)
-		r.Post("/", c.Submit)
+		r.With(middlewares.RequireConsent(consent.TypePersonalDataProcessing)).Post("/", c.Submit)
 		r.Patch("/{id}/viewed", c.UpdateViewed)
 	})
 

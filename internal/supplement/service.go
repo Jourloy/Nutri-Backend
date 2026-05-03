@@ -236,13 +236,23 @@ func (s *service) CalculateTodayIntakes(ctx context.Context, userID string, time
 				}
 
 				result = append(result, TodaySupplementIntake{
-					SupplementID:      supplement.ID,
-					SupplementName:    supplementName,
-					ScheduleID:        schedule.ID,
-					IntakeTime:        intakeTime,
-					IsTaken:           intake != nil && !intake.IsMissed,
-					IntakeID:          func() *string { if intake != nil { return &intake.ID }; return nil }(),
-					TakenAt:           func() *time.Time { if intake != nil { return &intake.TakenAt }; return nil }(),
+					SupplementID:   supplement.ID,
+					SupplementName: supplementName,
+					ScheduleID:     schedule.ID,
+					IntakeTime:     intakeTime,
+					IsTaken:        intake != nil && !intake.IsMissed,
+					IntakeID: func() *string {
+						if intake != nil {
+							return &intake.ID
+						}
+						return nil
+					}(),
+					TakenAt: func() *time.Time {
+						if intake != nil {
+							return &intake.TakenAt
+						}
+						return nil
+					}(),
 					IsMissed:          intake != nil && intake.IsMissed,
 					IsMissedYesterday: missedYesterday,
 					Icon:              icon,

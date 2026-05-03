@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/nutri02/internal/user"
 )
 
 type Service interface {

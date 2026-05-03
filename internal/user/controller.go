@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
-	"github.com/jourloy/somivyn/pkg/timeutil"
+	"github.com/jourloy/nutri02/pkg/timeutil"
 )
 
 var (

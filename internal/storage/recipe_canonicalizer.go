@@ -11,6 +11,7 @@ const recipeCanonicalizerSampleKey = "__recipe_image_canonicalizer__"
 
 var (
 	recipeImageAliasPrefixes = []string{
+		"/nutri02-recipe-images/",
 		"/somivyn-recipe-images/",
 		"/nutri-recipe-images/",
 	}

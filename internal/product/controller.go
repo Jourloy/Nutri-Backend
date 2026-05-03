@@ -10,9 +10,11 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/achievement"
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/pkg/timeutil"
+	"github.com/jourloy/nutri02/internal/achievement"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/consent"
+	"github.com/jourloy/nutri02/internal/middlewares"
+	"github.com/jourloy/nutri02/pkg/timeutil"
 )
 
 var (
@@ -34,6 +36,7 @@ func NewController() *Controller {
 
 func (c *Controller) RegisterRoutes(router chi.Router) {
 	router.Route("/product", func(r chi.Router) {
+		r.Use(middlewares.RequireConsent(consent.TypeSpecialCategoryHealth))
 		r.Post("/", c.Create)
 		r.Put("/", c.Update)
 		r.Delete("/{id}", c.Delete)

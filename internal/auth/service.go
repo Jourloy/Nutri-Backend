@@ -16,11 +16,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/argon2"
 
-	"github.com/jourloy/somivyn/internal/email"
-	"github.com/jourloy/somivyn/internal/lib"
-	"github.com/jourloy/somivyn/internal/telegram"
-	"github.com/jourloy/somivyn/internal/user"
-	"github.com/jourloy/somivyn/pkg/validator"
+	"github.com/jourloy/nutri02/internal/email"
+	"github.com/jourloy/nutri02/internal/lib"
+	"github.com/jourloy/nutri02/internal/telegram"
+	"github.com/jourloy/nutri02/internal/user"
+	"github.com/jourloy/nutri02/pkg/validator"
 )
 
 const (
@@ -70,11 +70,14 @@ func NewService(repo Repository) Service {
 		telegramService: telegram.NewService(),
 		emailService:    emailSvc,
 		jwtCfg: Config{
-			Secret:     []byte(lib.Config.JWTSecret),
-			Issuer:     "somivyn-api",
-			Audience:   "somivyn-web",
-			AccessTTL:  30 * time.Hour,
-			RefreshTTL: 30 * 24 * time.Hour,
+			Secret:            []byte(lib.Config.JWTSecret),
+			Issuer:            "nutri02-api",
+			Audience:          "nutri02-web",
+			AcceptedIssuers:   []string{"somivyn-api"},
+			AcceptedAudiences: []string{"somivyn-web"},
+			Leeway:            30 * time.Second,
+			AccessTTL:         30 * time.Hour,
+			RefreshTTL:        30 * 24 * time.Hour,
 		},
 	}
 }
@@ -164,6 +167,21 @@ func (s *service) Register(body RegisterData) (*LoginResponse, error) {
 	if errMsg := validator.ValidateUsername(body.Username); errMsg != "" {
 		return nil, errors.New(errMsg)
 	}
+	if !body.Is18 {
+		return nil, errors.New("age confirmation is required")
+	}
+	if !body.AcceptTerms {
+		return nil, errors.New("terms acceptance is required")
+	}
+	if !body.AcceptPrivacy {
+		return nil, errors.New("privacy policy acceptance is required")
+	}
+	if !body.PersonalDataConsent {
+		return nil, errors.New("personal data processing consent is required")
+	}
+	if strings.TrimSpace(body.PersonalDataConsentVersion) == "" {
+		return nil, errors.New("personal data consent version is required")
+	}
 
 	hash, err := s.hashPasswordArgon2id(body.Password)
 	if err != nil {
@@ -176,9 +194,12 @@ func (s *service) Register(body RegisterData) (*LoginResponse, error) {
 	}
 
 	u, err := s.userService.CreateUser(&user.UserCreate{
-		Username:     strings.ToLower(body.Username),
-		PasswordHash: hash,
-		Locale:       &locale,
+		Username:        strings.ToLower(body.Username),
+		PasswordHash:    hash,
+		Locale:          &locale,
+		IsAcceptTerms:   body.AcceptTerms,
+		IsAcceptPrivacy: body.AcceptPrivacy,
+		Is18:            body.Is18,
 	})
 	if err != nil {
 		return nil, err
@@ -215,17 +236,7 @@ func (s *service) Login(body LoginData) (*LoginResponse, error) {
 }
 
 func (s *service) Refresh(refreshToken string) (*LoginResponse, error) {
-	var claims Claims
-	_, err := jwt.ParseWithClaims(
-		refreshToken,
-		&claims,
-		func(t *jwt.Token) (any, error) { return s.jwtCfg.Secret, nil },
-		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
-		jwt.WithIssuer(s.jwtCfg.Issuer),
-		jwt.WithAudience(s.jwtCfg.Audience),
-		jwt.WithLeeway(30*time.Second),
-		jwt.WithExpirationRequired(),
-	)
+	claims, err := ValidateToken(s.jwtCfg, refreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("invalid refresh: %w", err)
 	}
@@ -485,10 +496,10 @@ func (s *service) sendEmailPasswordReset(emailAddr string, resetURL string, loca
 
 	var subject, body string
 	if lang == "en" {
-		subject = "Somivyn - Password Reset"
+		subject = "Nutri02 - Password Reset"
 		body = fmt.Sprintf(`Hello!
 
-You requested a password reset for your Somivyn account.
+You requested a password reset for your Nutri02 account.
 
 Click the link below to reset your password:
 %s
@@ -498,12 +509,12 @@ This link is valid for 1 hour.
 If you didn't request this, please ignore this email.
 
 Best regards,
-Somivyn Team`, resetURL)
+Nutri02 Team`, resetURL)
 	} else {
-		subject = "Somivyn - Сброс пароля"
+		subject = "Nutri02 - Сброс пароля"
 		body = fmt.Sprintf(`Привет!
 
-Вы запросили сброс пароля для вашего аккаунта Somivyn.
+Вы запросили сброс пароля для вашего аккаунта Nutri02.
 
 Перейдите по ссылке ниже, чтобы сбросить пароль:
 %s
@@ -513,7 +524,7 @@ Somivyn Team`, resetURL)
 Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
 
 С уважением,
-Команда Somivyn`, resetURL)
+Команда Nutri02`, resetURL)
 	}
 
 	return s.emailService.SendRawEmail(context.Background(), emailAddr, subject, body)

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jourloy/somivyn/internal/lib"
-	"github.com/jourloy/somivyn/internal/plan"
-	"github.com/jourloy/somivyn/internal/subscription"
-	userpkg "github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/nutri02/internal/lib"
+	"github.com/jourloy/nutri02/internal/plan"
+	"github.com/jourloy/nutri02/internal/subscription"
+	userpkg "github.com/jourloy/nutri02/internal/user"
 )
 
 const (

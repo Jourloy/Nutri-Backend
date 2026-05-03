@@ -20,9 +20,9 @@ import (
 	"github.com/yuin/goldmark/extension"
 	htmlrenderer "github.com/yuin/goldmark/renderer/html"
 
-	"github.com/jourloy/somivyn/internal/ai"
-	"github.com/jourloy/somivyn/internal/lib"
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/ai"
+	"github.com/jourloy/nutri02/internal/lib"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 const (

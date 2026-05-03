@@ -88,8 +88,8 @@ type FoodAnalysisResult struct {
 	Protein            float64  `json:"protein"`
 	Fat                float64  `json:"fat"`
 	Carbs              float64  `json:"carbs"`
-	Fiber              *float64 `json:"fiber"`              // nullable
-	Cholesterol        *float64 `json:"cholesterol"`        // nullable, in mg
+	Fiber              *float64 `json:"fiber"`       // nullable
+	Cholesterol        *float64 `json:"cholesterol"` // nullable, in mg
 	ProductName        string   `json:"productName"`
 	Confidence         float64  `json:"confidence"` // 0-1
 	Explanation        string   `json:"explanation"`
@@ -97,8 +97,8 @@ type FoodAnalysisResult struct {
 	BasicProtein       float64  `json:"basicProtein"`
 	BasicFat           float64  `json:"basicFat"`
 	BasicCarbs         float64  `json:"basicCarbs"`
-	BasicFiber         *float64 `json:"basicFiber"`       // per 100g, nullable
-	BasicCholesterol   *float64 `json:"basicCholesterol"` // per 100g in mg, nullable
+	BasicFiber         *float64 `json:"basicFiber"`                // per 100g, nullable
+	BasicCholesterol   *float64 `json:"basicCholesterol"`          // per 100g in mg, nullable
 	EstimatedWeight    *float64 `json:"estimatedWeight,omitempty"` // AI-estimated weight if not provided
 	WeightUnit         *string  `json:"weightUnit,omitempty"`      // "grams" or "milliliters"
 	UserProvidedWeight bool     `json:"userProvidedWeight"`        // true if user provided weight

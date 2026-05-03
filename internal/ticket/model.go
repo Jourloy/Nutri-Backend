@@ -11,8 +11,8 @@ type Ticket struct {
 	Id         int64      `json:"id" db:"id"`
 	UserId     string     `json:"user_id" db:"user_id"`
 	Subject    string     `json:"subject" db:"subject"`
-	Status     string     `json:"status" db:"status"`         // open, in_progress, waiting_response, resolved, closed
-	Priority   string     `json:"priority" db:"priority"`     // low, normal, high, urgent
+	Status     string     `json:"status" db:"status"`               // open, in_progress, waiting_response, resolved, closed
+	Priority   string     `json:"priority" db:"priority"`           // low, normal, high, urgent
 	Category   *string    `json:"category,omitempty" db:"category"` // technical, billing, feature_request, other
 	AssignedTo *string    `json:"assigned_to,omitempty" db:"assigned_to"`
 	CreatedAt  time.Time  `json:"created_at" db:"created_at"`

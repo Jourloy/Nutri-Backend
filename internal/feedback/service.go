@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jourloy/somivyn/internal/database"
+	"github.com/jourloy/nutri02/internal/database"
 )
 
 const cooldown = 7 * 24 * time.Hour

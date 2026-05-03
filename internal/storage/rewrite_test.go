@@ -122,25 +122,25 @@ func TestBlogImageURLCanonicalizerRewriteURL(t *testing.T) {
 	}{
 		{
 			name:    "relative somivyn alias",
-			input:   "/somivyn-blog-images/2026/03/cover.png?size=lg#hero",
+			input:   "/nutri02-blog-images/2026/03/cover.png?size=lg#hero",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png?size=lg#hero",
 			changed: true,
 		},
 		{
 			name:    "api domain alias",
-			input:   "https://api.somivyn.com/somivyn-blog-images/2026/03/cover.png",
+			input:   "https://api.nutri02.com/nutri02-blog-images/2026/03/cover.png",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
 			changed: true,
 		},
 		{
 			name:    "front domain alias",
-			input:   "https://somivyn.com/somivyn-blog-images/2026/03/cover.png",
+			input:   "https://nutri02.com/nutri02-blog-images/2026/03/cover.png",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
 			changed: true,
 		},
 		{
 			name:    "legacy minio alias",
-			input:   "https://minio.jourloy.com/somivyn-blog-images/2026/03/cover.png",
+			input:   "https://minio.jourloy.com/nutri02-blog-images/2026/03/cover.png",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
 			changed: true,
 		},
@@ -152,7 +152,7 @@ func TestBlogImageURLCanonicalizerRewriteURL(t *testing.T) {
 		},
 		{
 			name:    "legacy s3 bucket path",
-			input:   "https://s3.somivyn.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/blog/2026/03/cover.png",
+			input:   "https://s3.nutri02.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/blog/2026/03/cover.png",
 			want:    "https://cdn.example.com/storage/somivyn-images/blog/2026/03/cover.png",
 			changed: true,
 		},
@@ -205,7 +205,7 @@ func TestBlogImageURLCanonicalizerRewriteText(t *testing.T) {
 		t.Fatalf("NewBlogImageURLCanonicalizer() error = %v", err)
 	}
 
-	input := `<p><img src="/somivyn-blog-images/2026/03/cover.png" /></p>`
+	input := `<p><img src="/nutri02-blog-images/2026/03/cover.png" /></p>`
 	got, changed := rewriter.RewriteText(input)
 	if !changed {
 		t.Fatalf("expected text to change")
@@ -238,25 +238,25 @@ func TestRecipeImageURLCanonicalizerRewriteURL(t *testing.T) {
 	}{
 		{
 			name:    "relative somivyn alias",
-			input:   "/somivyn-recipe-images/2026/03/step.webp?size=lg#hero",
+			input:   "/nutri02-recipe-images/2026/03/step.webp?size=lg#hero",
 			want:    "https://cdn.example.com/storage/somivyn-images/recipe/2026/03/step.webp?size=lg#hero",
 			changed: true,
 		},
 		{
 			name:    "api domain alias",
-			input:   "https://api.somivyn.com/somivyn-recipe-images/2026/03/step.webp",
+			input:   "https://api.nutri02.com/nutri02-recipe-images/2026/03/step.webp",
 			want:    "https://cdn.example.com/storage/somivyn-images/recipe/2026/03/step.webp",
 			changed: true,
 		},
 		{
 			name:    "minio alias",
-			input:   "https://minio.jourloy.com/somivyn-recipe-images/2026/03/step.webp",
+			input:   "https://minio.jourloy.com/nutri02-recipe-images/2026/03/step.webp",
 			want:    "https://cdn.example.com/storage/somivyn-images/recipe/2026/03/step.webp",
 			changed: true,
 		},
 		{
 			name:    "legacy s3 bucket path",
-			input:   "https://s3.somivyn.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/recipe/2026/03/step.webp",
+			input:   "https://s3.nutri02.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/recipe/2026/03/step.webp",
 			want:    "https://cdn.example.com/storage/somivyn-images/recipe/2026/03/step.webp",
 			changed: true,
 		},

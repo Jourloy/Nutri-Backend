@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/mailgun/mailgun-go/v4"
@@ -41,12 +42,22 @@ type service struct {
 }
 
 func NewService() Service {
+	mailgunDomain := strings.TrimSpace(os.Getenv("MAILGUN_DOMAIN"))
+	if mailgunDomain == "" {
+		mailgunDomain = "nutri02.com"
+	}
+
+	mailgunFromEmail := strings.TrimSpace(os.Getenv("MAILGUN_FROM_EMAIL"))
+	if mailgunFromEmail == "" {
+		mailgunFromEmail = "noreply@nutri02.com"
+	}
+
 	return &service{
 		repo:             NewRepository(),
 		templates:        NewEmailTemplates(),
-		mailgunDomain:    os.Getenv("MAILGUN_DOMAIN"),
+		mailgunDomain:    mailgunDomain,
 		mailgunAPIKey:    os.Getenv("MAILGUN_API_KEY"),
-		mailgunFromEmail: os.Getenv("MAILGUN_FROM_EMAIL"),
+		mailgunFromEmail: mailgunFromEmail,
 	}
 }
 

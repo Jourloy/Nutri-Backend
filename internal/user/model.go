@@ -28,10 +28,13 @@ type User struct {
 
 // UserCreate представляет структуру для создания пользователя
 type UserCreate struct {
-	Username     string  `db:"username"`
-	PasswordHash string  `db:"password_hash"`
-	Locale       *string `db:"locale"`
-	Timezone     *string `db:"timezone"`
+	Username        string  `db:"username"`
+	PasswordHash    string  `db:"password_hash"`
+	Locale          *string `db:"locale"`
+	Timezone        *string `db:"timezone"`
+	IsAcceptTerms   bool    `db:"is_accept_terms"`
+	IsAcceptPrivacy bool    `db:"is_accept_privacy"`
+	Is18            bool    `db:"is_18"`
 }
 
 // UserStats представляет статистику пользователя

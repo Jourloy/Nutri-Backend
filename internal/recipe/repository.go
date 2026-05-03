@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/jourloy/somivyn/internal/database"
+	"github.com/jourloy/nutri02/internal/database"
 )
 
 type Repository interface {
@@ -17,7 +17,7 @@ type Repository interface {
 	GetBookById(ctx context.Context, id int64) (*Book, error)
 	GetBookByShareToken(ctx context.Context, token string) (*Book, error)
 	GetUserBooks(ctx context.Context, userId string) ([]Book, error)
-	GetSomivynBook(ctx context.Context) (*Book, error)
+	GetNutri02Book(ctx context.Context) (*Book, error)
 	SetBookShareToken(ctx context.Context, id int64, token string) error
 	ClearBookShareToken(ctx context.Context, id int64) error
 
@@ -49,8 +49,8 @@ type Repository interface {
 	GetRecipeBySlug(ctx context.Context, slug string) (*Recipe, error)
 	GetRecipeByShareToken(ctx context.Context, token string) (*Recipe, error)
 	GetRecipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error)
-	UpdateSomivynRecipe(ctx context.Context, r RecipeUpdate) (*Recipe, error)
-	DeleteSomivynRecipe(ctx context.Context, id int64) error
+	UpdateNutri02Recipe(ctx context.Context, r RecipeUpdate) (*Recipe, error)
+	DeleteNutri02Recipe(ctx context.Context, id int64) error
 	SetRecipeShareToken(ctx context.Context, id int64, token string) error
 	ClearRecipeShareToken(ctx context.Context, id int64) error
 	IncrementViewCount(ctx context.Context, id int64) error
@@ -193,13 +193,20 @@ func (r *repository) GetUserBooks(ctx context.Context, userId string) ([]Book, e
 	return books, nil
 }
 
-func (r *repository) GetSomivynBook(ctx context.Context) (*Book, error) {
+func (r *repository) GetNutri02Book(ctx context.Context) (*Book, error) {
 	const q = `
 		SELECT b.id, b.user_id, b.name, b.book_type, b.share_token, b.is_shared, b.og_image_url,
 		       b.created_at, b.updated_at,
 		       COALESCE((SELECT COUNT(*) FROM recipes WHERE book_id = b.id AND deleted_at IS NULL), 0) as recipe_count
 		FROM recipe_books b
-		WHERE b.book_type = 'somivyn' AND b.deleted_at IS NULL`
+		WHERE b.book_type IN ('nutri02', 'somivyn', 'nutri') AND b.deleted_at IS NULL
+		ORDER BY CASE b.book_type
+			WHEN 'nutri02' THEN 0
+			WHEN 'somivyn' THEN 1
+			ELSE 2
+		END,
+		b.created_at ASC
+		LIMIT 1`
 
 	var book Book
 	if err := r.db.GetContext(ctx, &book, q); err != nil {
@@ -562,7 +569,7 @@ func (r *repository) UpdateRecipe(ctx context.Context, ru RecipeUpdate) (*Recipe
 	return &recipe, nil
 }
 
-func (r *repository) UpdateSomivynRecipe(ctx context.Context, ru RecipeUpdate) (*Recipe, error) {
+func (r *repository) UpdateNutri02Recipe(ctx context.Context, ru RecipeUpdate) (*Recipe, error) {
 	const q = `
 		UPDATE recipes SET
 			slug = $1,
@@ -617,7 +624,7 @@ func (r *repository) DeleteRecipe(ctx context.Context, id int64, userId string) 
 	return err
 }
 
-func (r *repository) DeleteSomivynRecipe(ctx context.Context, id int64) error {
+func (r *repository) DeleteNutri02Recipe(ctx context.Context, id int64) error {
 	const q = `UPDATE recipes SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
 	_, err := r.db.ExecContext(ctx, q, id)
 	return err

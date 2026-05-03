@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -27,13 +28,15 @@ type Claims struct {
 }
 
 type Config struct {
-	Secret       []byte // для HS256
-	PublicKeyPEM []byte // для RS256
-	Issuer       string
-	Audience     string
-	Leeway       time.Duration
-	AccessTTL    time.Duration
-	RefreshTTL   time.Duration
+	Secret            []byte // для HS256
+	PublicKeyPEM      []byte // для RS256
+	Issuer            string
+	Audience          string
+	AcceptedIssuers   []string
+	AcceptedAudiences []string
+	Leeway            time.Duration
+	AccessTTL         time.Duration
+	RefreshTTL        time.Duration
 }
 
 type contextKey int
@@ -88,13 +91,14 @@ func ValidateToken(cfg Config, tokenString string) (*Claims, error) {
 		// ВКЛЮЧАЕМ ПРОВЕРКИ КЛЕЙМОВ ЗДЕСЬ:
 		jwt.WithValidMethods(validAlgs),
 		jwt.WithLeeway(cfg.Leeway),
-		// Эти опции заставят парсер валидировать iss/aud/exp/iat/nbf:
-		jwt.WithIssuer(cfg.Issuer),     // если пусто — проверка пропущена
-		jwt.WithAudience(cfg.Audience), // если пусто — проверка пропущена
-		jwt.WithExpirationRequired(),   // требовать exp
+		jwt.WithExpirationRequired(), // требовать exp
 		// по желанию: jwt.WithIssuedAt(), jwt.WithSubject("..."), etc.
 	)
 	if err != nil {
+		return nil, fmt.Errorf("invalid token: %w", err)
+	}
+
+	if err := validateRegisteredClaims(cfg, &claims); err != nil {
 		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
@@ -102,6 +106,79 @@ func ValidateToken(cfg Config, tokenString string) (*Claims, error) {
 		return nil, errors.New("missing user id in token")
 	}
 	return &claims, nil
+}
+
+func validateRegisteredClaims(cfg Config, claims *Claims) error {
+	if claims == nil {
+		return errors.New("missing claims")
+	}
+
+	acceptedIssuers := appendAcceptedValues(cfg.AcceptedIssuers, cfg.Issuer)
+	if len(acceptedIssuers) > 0 && !containsFold(acceptedIssuers, claims.Issuer) {
+		return fmt.Errorf("invalid issuer %q", claims.Issuer)
+	}
+
+	acceptedAudiences := appendAcceptedValues(cfg.AcceptedAudiences, cfg.Audience)
+	if len(acceptedAudiences) > 0 {
+		audiences := []string(claims.Audience)
+		if !intersectsFold(acceptedAudiences, audiences) {
+			return fmt.Errorf("invalid audience %q", audiences)
+		}
+	}
+
+	return nil
+}
+
+func appendAcceptedValues(values []string, canonical string) []string {
+	result := make([]string, 0, len(values)+1)
+	seen := make(map[string]struct{}, len(values)+1)
+
+	appendValue := func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+
+		key := strings.ToLower(trimmed)
+		if _, ok := seen[key]; ok {
+			return
+		}
+
+		seen[key] = struct{}{}
+		result = append(result, trimmed)
+	}
+
+	appendValue(canonical)
+	for _, value := range values {
+		appendValue(value)
+	}
+
+	return result
+}
+
+func containsFold(values []string, target string) bool {
+	normalizedTarget := strings.TrimSpace(target)
+	if normalizedTarget == "" {
+		return false
+	}
+
+	for _, value := range values {
+		if strings.EqualFold(value, normalizedTarget) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func intersectsFold(values []string, targets []string) bool {
+	for _, target := range targets {
+		if containsFold(values, target) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func WithAuthInfo(ctx context.Context, ai *AuthInfo) context.Context {

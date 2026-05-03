@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/log"
 
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 type canonicalStorage struct {
@@ -223,14 +223,14 @@ func TestCreateArticleCanonicalizesBlogImageFieldsBeforeSaving(t *testing.T) {
 	repo := &stubRepository{}
 	svc := newTestService(t, repo)
 
-	previewImageURL := "/somivyn-blog-images/2026/03/preview.png"
-	ogImageURL := "https://api.somivyn.com/somivyn-blog-images/2026/03/og.png"
+	previewImageURL := "/nutri02-blog-images/2026/03/preview.png"
+	ogImageURL := "https://api.nutri02.com/nutri02-blog-images/2026/03/og.png"
 	article, err := svc.CreateArticle(context.Background(), ArticleCreate{
 		Slug:            "my-article",
 		TitleRu:         "RU",
 		TitleEn:         "EN",
-		ContentRu:       `<p><img src="/somivyn-blog-images/2026/03/body.png" /></p>`,
-		ContentEn:       `<p><img src="https://somivyn.com/somivyn-blog-images/2026/03/body-en.png" /></p>`,
+		ContentRu:       `<p><img src="/nutri02-blog-images/2026/03/body.png" /></p>`,
+		ContentEn:       `<p><img src="https://nutri02.com/nutri02-blog-images/2026/03/body-en.png" /></p>`,
 		PreviewImageUrl: &previewImageURL,
 		OgImageUrl:      &ogImageURL,
 		Status:          "draft",
@@ -272,15 +272,15 @@ func TestUpdateArticleCanonicalizesBlogImageFieldsBeforeSaving(t *testing.T) {
 	}
 	svc := newTestService(t, repo)
 
-	previewImageURL := "https://minio.jourloy.com/somivyn-blog-images/2026/03/preview.png"
-	ogImageURL := "https://s3.somivyn.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/blog/2026/03/og.png"
+	previewImageURL := "https://minio.jourloy.com/nutri02-blog-images/2026/03/preview.png"
+	ogImageURL := "https://s3.nutri02.com/cd83329f-b1dd-42b6-afac-9af67c6c8cc1/blog/2026/03/og.png"
 	_, err := svc.UpdateArticle(context.Background(), ArticleUpdate{
 		Id:              7,
 		Slug:            "my-article",
 		TitleRu:         "RU",
 		TitleEn:         "EN",
-		ContentRu:       `<p><img src="/somivyn-blog-images/2026/03/body.png" /></p>`,
-		ContentEn:       `<p><img src="https://api.somivyn.com/somivyn-blog-images/2026/03/body-en.png" /></p>`,
+		ContentRu:       `<p><img src="/nutri02-blog-images/2026/03/body.png" /></p>`,
+		ContentEn:       `<p><img src="https://api.nutri02.com/nutri02-blog-images/2026/03/body-en.png" /></p>`,
 		PreviewImageUrl: &previewImageURL,
 		OgImageUrl:      &ogImageURL,
 		Status:          "public",
@@ -304,14 +304,14 @@ func TestUpdateArticleCanonicalizesBlogImageFieldsBeforeSaving(t *testing.T) {
 func TestGetArticleByIdCanonicalizesAdminResponse(t *testing.T) {
 	t.Parallel()
 
-	previewImageURL := "https://api.somivyn.com/somivyn-blog-images/2026/03/preview.png"
+	previewImageURL := "https://api.nutri02.com/nutri02-blog-images/2026/03/preview.png"
 	repo := &stubRepository{
 		getArticleByIDResult: &Article{
 			Id:              9,
 			Slug:            "admin-article",
 			TitleRu:         "RU",
 			TitleEn:         "EN",
-			ContentRu:       `<p><img src="/somivyn-blog-images/2026/03/body.png" /></p>`,
+			ContentRu:       `<p><img src="/nutri02-blog-images/2026/03/body.png" /></p>`,
 			ContentEn:       `<p>EN</p>`,
 			PreviewImageUrl: &previewImageURL,
 			Status:          "draft",
@@ -336,7 +336,7 @@ func TestGetArticleByIdCanonicalizesAdminResponse(t *testing.T) {
 func TestGetAllArticlesCanonicalizesAdminListResponse(t *testing.T) {
 	t.Parallel()
 
-	previewImageURL := "https://somivyn.com/somivyn-blog-images/2026/03/preview.png"
+	previewImageURL := "https://nutri02.com/nutri02-blog-images/2026/03/preview.png"
 	repo := &stubRepository{
 		getArticlesResult: &ArticleListResponse{
 			Articles: []Article{
@@ -345,7 +345,7 @@ func TestGetAllArticlesCanonicalizesAdminListResponse(t *testing.T) {
 					Slug:            "list-article",
 					TitleRu:         "RU",
 					TitleEn:         "EN",
-					ContentRu:       `<p><img src="/somivyn-blog-images/2026/03/body.png" /></p>`,
+					ContentRu:       `<p><img src="/nutri02-blog-images/2026/03/body.png" /></p>`,
 					ContentEn:       `<p>EN</p>`,
 					PreviewImageUrl: &previewImageURL,
 					Status:          "draft",
@@ -373,14 +373,14 @@ func TestGetAllArticlesCanonicalizesAdminListResponse(t *testing.T) {
 func TestGetPublicArticleBySlugCanonicalizesPublicResponse(t *testing.T) {
 	t.Parallel()
 
-	previewImageURL := "https://minio.jourloy.com/somivyn-blog-images/2026/03/preview.png"
+	previewImageURL := "https://minio.jourloy.com/nutri02-blog-images/2026/03/preview.png"
 	repo := &stubRepository{
 		getArticleBySlug: &Article{
 			Id:                 11,
 			Slug:               "public-article",
 			TitleRu:            "RU",
 			TitleEn:            "EN",
-			ContentRu:          `<p><img src="/somivyn-blog-images/2026/03/body.png" /></p>`,
+			ContentRu:          `<p><img src="/nutri02-blog-images/2026/03/body.png" /></p>`,
 			ContentEn:          `<p>EN</p>`,
 			PreviewImageUrl:    &previewImageURL,
 			Status:             "public",

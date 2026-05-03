@@ -7,7 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"github.com/jourloy/somivyn/internal/database"
+	"github.com/jourloy/nutri02/internal/database"
 )
 
 type Repository interface {
@@ -45,8 +45,14 @@ const userColumns = `
 
 func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*User, error) {
 	const insertQ = `
-	INSERT INTO users (username, password_hash, view_updates, locale, timezone)
-	VALUES (:username, :password_hash, :view_updates, :locale, :timezone)
+	INSERT INTO users (
+		username, password_hash, view_updates, locale, timezone,
+		is_accept_terms, is_accept_privacy, is_18
+	)
+	VALUES (
+		:username, :password_hash, :view_updates, :locale, :timezone,
+		:is_accept_terms, :is_accept_privacy, :is_18
+	)
 	ON CONFLICT (username) DO NOTHING
 	RETURNING ` + userColumns + `;`
 
@@ -58,11 +64,14 @@ func (r *repository) CreateUser(ctx context.Context, userCreate *UserCreate) (*U
 	}
 
 	args := map[string]any{
-		"username":      userCreate.Username,
-		"password_hash": userCreate.PasswordHash,
-		"view_updates":  3,
-		"locale":        locale,
-		"timezone":      timezone,
+		"username":          userCreate.Username,
+		"password_hash":     userCreate.PasswordHash,
+		"view_updates":      3,
+		"locale":            locale,
+		"timezone":          timezone,
+		"is_accept_terms":   userCreate.IsAcceptTerms,
+		"is_accept_privacy": userCreate.IsAcceptPrivacy,
+		"is_18":             userCreate.Is18,
 	}
 
 	// Сначала пытаемся вставить и сразу вернуть строку
@@ -185,7 +194,6 @@ func (r *repository) DeleteUser(ctx context.Context, id string) (*User, error) {
 		{query: `DELETE FROM ticket_messages WHERE user_id = $1`, args: []any{id}},
 		{query: `DELETE FROM ai_violations WHERE user_id = $1`, args: []any{id}},
 		{query: `DELETE FROM ai_analysis_logs WHERE user_id = $1`, args: []any{id}},
-		{query: `DELETE FROM consent_records WHERE user_id = $1`, args: []any{id}},
 	}
 
 	for _, d := range deletions {

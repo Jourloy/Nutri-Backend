@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/nutri02/internal/lib"
 )
 
 type CloudPaymentsClient interface {

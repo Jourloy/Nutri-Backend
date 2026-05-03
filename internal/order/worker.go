@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	"github.com/jourloy/somivyn/internal/plan"
-	"github.com/jourloy/somivyn/internal/subscription"
+	"github.com/jourloy/nutri02/internal/plan"
+	"github.com/jourloy/nutri02/internal/subscription"
 )
 
 func StartWorker() {

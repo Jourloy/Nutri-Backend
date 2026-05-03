@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 
-	"github.com/jourloy/somivyn/internal/database"
+	"github.com/jourloy/nutri02/internal/database"
 )
 
 type Repository interface {
@@ -262,10 +262,10 @@ func (r *repository) ValidateAndCalculate(ctx context.Context, code string, plan
 	finalAmount := amountMinor - discountAmount
 
 	return &ValidatePromoResponse{
-		Valid:              true,
-		PromoCodeId:        promo.Id,
+		Valid:               true,
+		PromoCodeId:         promo.Id,
 		DiscountAmountMinor: discountAmount,
-		FinalAmountMinor:   finalAmount,
-		Message:            "Промокод применен успешно",
+		FinalAmountMinor:    finalAmount,
+		Message:             "Промокод применен успешно",
 	}, nil
 }

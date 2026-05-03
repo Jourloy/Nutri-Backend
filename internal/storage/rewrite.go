@@ -9,9 +9,15 @@ import (
 )
 
 var legacyFolderMap = map[string]string{
-	"nutri-ai-images":     FolderAI,
-	"nutri-blog-images":   FolderBlog,
-	"nutri-recipe-images": FolderRecipe,
+	"nutri02-ai-images":     FolderAI,
+	"nutri02-blog-images":   FolderBlog,
+	"nutri02-recipe-images": FolderRecipe,
+	"somivyn-ai-images":     FolderAI,
+	"somivyn-blog-images":   FolderBlog,
+	"somivyn-recipe-images": FolderRecipe,
+	"nutri-ai-images":       FolderAI,
+	"nutri-blog-images":     FolderBlog,
+	"nutri-recipe-images":   FolderRecipe,
 }
 
 type LegacyURLRewriter struct {

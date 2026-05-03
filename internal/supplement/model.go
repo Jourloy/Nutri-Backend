@@ -51,15 +51,15 @@ func (a IntArray) Contains(val int) bool {
 
 // SupplementTemplate represents a predefined supplement template
 type SupplementTemplate struct {
-	ID            int64   `json:"id" db:"id"`
-	Slug          string  `json:"slug" db:"slug"`
-	NameRu        string  `json:"nameRu" db:"name_ru"`
-	NameEn        string  `json:"nameEn" db:"name_en"`
-	Category      string  `json:"category" db:"category"` // 'vitamin', 'mineral', 'sports', 'other'
-	Icon          *string `json:"icon,omitempty" db:"icon"`
-	DescriptionRu *string `json:"descriptionRu,omitempty" db:"description_ru"`
-	DescriptionEn *string `json:"descriptionEn,omitempty" db:"description_en"`
-	SortOrder     int     `json:"sortOrder" db:"sort_order"`
+	ID            int64     `json:"id" db:"id"`
+	Slug          string    `json:"slug" db:"slug"`
+	NameRu        string    `json:"nameRu" db:"name_ru"`
+	NameEn        string    `json:"nameEn" db:"name_en"`
+	Category      string    `json:"category" db:"category"` // 'vitamin', 'mineral', 'sports', 'other'
+	Icon          *string   `json:"icon,omitempty" db:"icon"`
+	DescriptionRu *string   `json:"descriptionRu,omitempty" db:"description_ru"`
+	DescriptionEn *string   `json:"descriptionEn,omitempty" db:"description_en"`
+	SortOrder     int       `json:"sortOrder" db:"sort_order"`
 	CreatedAt     time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt     time.Time `json:"updatedAt" db:"updated_at"`
 }
@@ -79,15 +79,15 @@ type Supplement struct {
 	DeletedAt  *time.Time `json:"deletedAt,omitempty" db:"deleted_at"`
 
 	// Joined data (not in DB)
-	Template  *SupplementTemplate   `json:"template,omitempty" db:"-"`
-	Schedules []SupplementSchedule  `json:"schedules,omitempty" db:"-"`
+	Template  *SupplementTemplate  `json:"template,omitempty" db:"-"`
+	Schedules []SupplementSchedule `json:"schedules,omitempty" db:"-"`
 }
 
 // SupplementSchedule defines when to take a supplement
 type SupplementSchedule struct {
 	ID                 string    `json:"id" db:"id"`
 	SupplementID       string    `json:"supplementId" db:"supplement_id"`
-	FrequencyType      string    `json:"frequencyType" db:"frequency_type"` // 'times_per_day', 'once_per_day', etc.
+	FrequencyType      string    `json:"frequencyType" db:"frequency_type"`     // 'times_per_day', 'once_per_day', etc.
 	IntakeTime         *string   `json:"intakeTime,omitempty" db:"intake_time"` // HH:MM format
 	DaysOfWeek         IntArray  `json:"daysOfWeek,omitempty" db:"days_of_week"`
 	IntervalDays       *int      `json:"intervalDays,omitempty" db:"interval_days"`
@@ -131,23 +131,23 @@ type SupplementNotificationLog struct {
 
 // SupplementCreateRequest is the request body for creating a supplement
 type SupplementCreateRequest struct {
-	TemplateID *int64                       `json:"templateId,omitempty"`
-	CustomName *string                      `json:"customName,omitempty"`
-	StartDate  string                       `json:"startDate"` // YYYY-MM-DD
-	EndDate    *string                      `json:"endDate,omitempty"`
-	Notes      *string                      `json:"notes,omitempty"`
-	Schedules  []SupplementScheduleCreate   `json:"schedules"`
+	TemplateID *int64                     `json:"templateId,omitempty"`
+	CustomName *string                    `json:"customName,omitempty"`
+	StartDate  string                     `json:"startDate"` // YYYY-MM-DD
+	EndDate    *string                    `json:"endDate,omitempty"`
+	Notes      *string                    `json:"notes,omitempty"`
+	Schedules  []SupplementScheduleCreate `json:"schedules"`
 }
 
 // SupplementScheduleCreate is the request body for creating a schedule
 type SupplementScheduleCreate struct {
-	FrequencyType      string   `json:"frequencyType"`
-	IntakeTime         *string  `json:"intakeTime,omitempty"`
-	DaysOfWeek         []int    `json:"daysOfWeek,omitempty"`
-	IntervalDays       *int     `json:"intervalDays,omitempty"`
-	DayOfMonth         *int     `json:"dayOfMonth,omitempty"`
-	EnableNotification bool     `json:"enableNotification"`
-	NotificationTime   *string  `json:"notificationTime,omitempty"`
+	FrequencyType      string  `json:"frequencyType"`
+	IntakeTime         *string `json:"intakeTime,omitempty"`
+	DaysOfWeek         []int   `json:"daysOfWeek,omitempty"`
+	IntervalDays       *int    `json:"intervalDays,omitempty"`
+	DayOfMonth         *int    `json:"dayOfMonth,omitempty"`
+	EnableNotification bool    `json:"enableNotification"`
+	NotificationTime   *string `json:"notificationTime,omitempty"`
 }
 
 // IntakeCreateRequest is the request body for marking supplement as taken
@@ -160,16 +160,16 @@ type IntakeCreateRequest struct {
 
 // TodaySupplementIntake represents a supplement that should be taken today
 type TodaySupplementIntake struct {
-	SupplementID       string     `json:"supplementId"`
-	SupplementName     string     `json:"supplementName"`
-	ScheduleID         string     `json:"scheduleId"`
-	IntakeTime         string     `json:"intakeTime"` // HH:MM
-	IsTaken            bool       `json:"isTaken"`
-	IntakeID           *string    `json:"intakeId,omitempty"` // ID of the intake record if taken
-	TakenAt            *time.Time `json:"takenAt,omitempty"`
-	IsMissed           bool       `json:"isMissed"`
-	IsMissedYesterday  bool       `json:"isMissedYesterday"`
-	Icon               *string    `json:"icon,omitempty"`
+	SupplementID      string     `json:"supplementId"`
+	SupplementName    string     `json:"supplementName"`
+	ScheduleID        string     `json:"scheduleId"`
+	IntakeTime        string     `json:"intakeTime"` // HH:MM
+	IsTaken           bool       `json:"isTaken"`
+	IntakeID          *string    `json:"intakeId,omitempty"` // ID of the intake record if taken
+	TakenAt           *time.Time `json:"takenAt,omitempty"`
+	IsMissed          bool       `json:"isMissed"`
+	IsMissedYesterday bool       `json:"isMissedYesterday"`
+	Icon              *string    `json:"icon,omitempty"`
 }
 
 // SupplementStatistics represents statistics for supplements

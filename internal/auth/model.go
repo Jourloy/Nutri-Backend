@@ -8,9 +8,14 @@ type LoginData struct {
 }
 
 type RegisterData struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Locale   string `json:"locale"`
+	Username                   string `json:"username"`
+	Password                   string `json:"password"`
+	Locale                     string `json:"locale"`
+	Is18                       bool   `json:"is18"`
+	AcceptTerms                bool   `json:"acceptTerms"`
+	AcceptPrivacy              bool   `json:"acceptPrivacy"`
+	PersonalDataConsent        bool   `json:"personalDataConsent"`
+	PersonalDataConsentVersion string `json:"personalDataConsentVersion"`
 }
 
 // PasswordResetToken represents a password reset token in the database
@@ -37,8 +42,8 @@ type ResetPasswordData struct {
 
 // PasswordResetResponse is returned when requesting a password reset
 type PasswordResetResponse struct {
-	Method  string `json:"method"`            // "telegram" or "email"
-	Message string `json:"message"`           // User-friendly message
-	Sent    bool   `json:"sent"`              // Whether the reset link was sent
-	Email   string `json:"email,omitempty"`   // Masked email if sent via email
+	Method  string `json:"method"`          // "telegram" or "email"
+	Message string `json:"message"`         // User-friendly message
+	Sent    bool   `json:"sent"`            // Whether the reset link was sent
+	Email   string `json:"email,omitempty"` // Masked email if sent via email
 }

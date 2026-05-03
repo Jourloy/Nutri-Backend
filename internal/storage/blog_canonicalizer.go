@@ -12,6 +12,7 @@ const blogCanonicalizerSampleKey = "__blog_image_canonicalizer__"
 
 var (
 	blogImageAliasPrefixes = []string{
+		"/nutri02-blog-images/",
 		"/somivyn-blog-images/",
 		"/nutri-blog-images/",
 	}
@@ -20,13 +21,20 @@ var (
 	}
 	defaultKnownImageHosts = []string{
 		"api.nutri.jourloy.com",
+		"api.nutri02.jourloy.com",
+		"api.nutri02.com",
 		"api.somivyn.com",
 		"api.somivyn.jourloy.com",
+		"api-somivyn.jourloy.com",
+		"api-nutri.jourloy.com",
 		"minio-somivyn.jourloy.com",
 		"minio.jourloy.com",
 		"nutri.jourloy.com",
+		"nutri02.jourloy.com",
+		"s3.nutri02.com",
 		"s3.somivyn.com",
 		"s3.twcstorage.ru",
+		"nutri02.com",
 		"somivyn.com",
 		"somivyn.jourloy.com",
 		"72.56.69.80:9000",
@@ -134,7 +142,7 @@ func newBlogImageURLCanonicalizer(publicBaseURL, endpointBaseURL, bucketName str
 		targetBucket:    strings.Trim(strings.TrimSpace(bucketName), "/"),
 		knownHosts:      knownHosts,
 		textPattern: regexp.MustCompile(
-			`https?://[^\s"'<>)]+|/(?:somivyn|nutri)-blog-images/[^\s"'<>)]+`,
+			`https?://[^\s"'<>)]+|/(?:nutri02|somivyn|nutri)-blog-images/[^\s"'<>)]+`,
 		),
 	}, nil
 }

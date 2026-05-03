@@ -8,9 +8,9 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/internal/lib"
-	"github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/lib"
+	"github.com/jourloy/nutri02/internal/user"
 )
 
 func Auth(next http.Handler) http.Handler {
@@ -23,11 +23,14 @@ func Auth(next http.Handler) http.Handler {
 		}
 
 		jwtCfg := auth.Config{
-			Secret:     []byte(lib.Config.JWTSecret),
-			Issuer:     "somivyn-api",
-			Audience:   "somivyn-web",
-			AccessTTL:  1 * time.Hour,
-			RefreshTTL: 30 * 24 * time.Hour,
+			Secret:            []byte(lib.Config.JWTSecret),
+			Issuer:            "nutri02-api",
+			Audience:          "nutri02-web",
+			AcceptedIssuers:   []string{"somivyn-api"},
+			AcceptedAudiences: []string{"somivyn-web"},
+			Leeway:            30 * time.Second,
+			AccessTTL:         1 * time.Hour,
+			RefreshTTL:        30 * 24 * time.Hour,
 		}
 
 		token := extractToken(r)
@@ -41,10 +44,10 @@ func Auth(next http.Handler) http.Handler {
 		if err != nil {
 			// Если access токен просто истёк — чистим ТОЛЬКО access cookie (оставляем refresh, чтобы фронт мог рефрешнуться)
 			if errors.Is(err, jwt.ErrTokenExpired) {
-				clearAccessCookie(w, r)
+				auth.ClearAccessCookie(w, r)
 			} else {
 				// Невалиден (подпись/формат и т.п.) — чистим всё
-				clearAllAuthCookies(w, r)
+				auth.ClearAuthCookies(w, r)
 			}
 			w.Header().Set("WWW-Authenticate", "Bearer error=\"invalid_token\"")
 			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
@@ -61,18 +64,18 @@ func Auth(next http.Handler) http.Handler {
 
 		u, err := userRepo.GetUser(ctx, claims.UserId)
 		if err != nil {
-			clearAllAuthCookies(w, r)
+			auth.ClearAuthCookies(w, r)
 			http.Error(w, "failed to load user", http.StatusForbidden)
 			return
 		}
 		if u == nil || u.DeletedAt != nil {
-			clearAllAuthCookies(w, r)
+			auth.ClearAuthCookies(w, r)
 			http.Error(w, "user disabled", http.StatusForbidden)
 			return
 		}
 		if u.TokenVersion != ai.TokenVersion {
 			// Версия токена не совпала (например, сменили пароль/выход со всех устройств) — чистим всё
-			clearAllAuthCookies(w, r)
+			auth.ClearAuthCookies(w, r)
 			http.Error(w, "token version incorrect", http.StatusForbidden)
 			return
 		}
@@ -119,48 +122,4 @@ func extractToken(r *http.Request) string {
 		return strings.TrimSpace(c.Value)
 	}
 	return ""
-}
-
-// ===== Очистка cookie =====
-
-// Подбери SameSite/Secure под свои условия. Если у тебя cross-site (frontend другой домен)
-// и ты ставишь SameSite=None, здесь тоже нужно SameSite=None и Secure=true.
-func clearAccessCookie(w http.ResponseWriter, r *http.Request) {
-	secure, samesite := cookieFlags(r) // см. функцию ниже
-	http.SetCookie(w, &http.Cookie{
-		Name:     "jwt",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: samesite,
-		Secure:   secure,
-		// Любой из двух вариантов — MaxAge=-1 или Expires в прошлом — удаляет cookie
-		MaxAge:  -1,
-		Expires: time.Unix(0, 0),
-	})
-}
-
-func clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
-	secure, samesite := cookieFlags(r)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Path:     "/api/v1/auth/refresh", // тот же Path, что при установке!
-		HttpOnly: true,
-		SameSite: samesite,
-		Secure:   secure,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	})
-}
-
-func clearAllAuthCookies(w http.ResponseWriter, r *http.Request) {
-	clearAccessCookie(w, r)
-	clearRefreshCookie(w, r)
-}
-
-// Определи флаги cookie. Для локалки (same-site на http://localhost) — Lax,false.
-// Для cross-site (другие домены) — None,true (иначе браузер проигнорирует).
-func cookieFlags(r *http.Request) (secure bool, samesite http.SameSite) {
-	return true, http.SameSiteNoneMode
 }

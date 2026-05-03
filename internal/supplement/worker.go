@@ -58,7 +58,7 @@ func cleanupOldNotifications(ctx context.Context, repo Repository) {
 }
 
 // Note: Supplement notification sending logic is implemented in Telegram bot worker
-// See: /Somivyn-Telegram/internal/supplement/worker.go (to be created in Phase 7)
+// See: /Nutri02-Telegram/internal/supplement/worker.go (to be created in Phase 7)
 //
 // The Telegram bot worker will:
 // 1. Run every 2 minutes

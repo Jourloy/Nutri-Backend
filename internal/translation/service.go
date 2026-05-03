@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/jourloy/somivyn/internal/cache"
+	"github.com/jourloy/nutri02/internal/cache"
 )
 
 type NamespaceMap map[string]map[string]string

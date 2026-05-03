@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/internal/subscription"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/subscription"
 )
 
 var (

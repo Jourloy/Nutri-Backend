@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/log"
-	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/nutri02/internal/lib"
 )
 
 // AIProvider interface defines the methods that all AI providers must implement

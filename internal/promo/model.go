@@ -43,9 +43,9 @@ type ValidatePromoRequest struct {
 
 // ValidatePromoResponse представляет ответ с расчетом скидки
 type ValidatePromoResponse struct {
-	Valid              bool   `json:"valid"`
-	PromoCodeId        int64  `json:"promo_code_id,omitempty"`
+	Valid               bool   `json:"valid"`
+	PromoCodeId         int64  `json:"promo_code_id,omitempty"`
 	DiscountAmountMinor int64  `json:"discount_amount_minor"`
-	FinalAmountMinor   int64  `json:"final_amount_minor"`
-	Message            string `json:"message,omitempty"`
+	FinalAmountMinor    int64  `json:"final_amount_minor"`
+	Message             string `json:"message,omitempty"`
 }

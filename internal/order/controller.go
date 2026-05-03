@@ -16,8 +16,10 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/consent"
+	"github.com/jourloy/nutri02/internal/lib"
+	"github.com/jourloy/nutri02/internal/middlewares"
 )
 
 var (
@@ -30,7 +32,7 @@ func NewController() *Controller { return &Controller{service: NewService()} }
 
 func (c *Controller) RegisterRoutes(r chi.Router) {
 	r.Route("/order", func(r chi.Router) {
-		r.Post("/init", c.Init)
+		r.With(middlewares.RequireConsent(consent.TypePersonalDataProcessing)).Post("/init", c.Init)
 		r.Get("/paid", c.Paid)
 		r.Post("/notify/tbank", c.NotifyTBank)
 		r.Post("/notify/cloudpayments/{type}", c.NotifyCloudPayments)

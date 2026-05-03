@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/nutri02/internal/auth"
 )
 
 var (

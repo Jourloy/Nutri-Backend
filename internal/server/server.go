@@ -10,36 +10,36 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/jourloy/somivyn/internal/achievement"
-	"github.com/jourloy/somivyn/internal/ad"
-	"github.com/jourloy/somivyn/internal/admin"
-	"github.com/jourloy/somivyn/internal/ai"
-	"github.com/jourloy/somivyn/internal/analytics"
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/internal/blog"
-	"github.com/jourloy/somivyn/internal/body"
-	"github.com/jourloy/somivyn/internal/cache"
-	"github.com/jourloy/somivyn/internal/consent"
-	"github.com/jourloy/somivyn/internal/database"
-	"github.com/jourloy/somivyn/internal/feature"
-	"github.com/jourloy/somivyn/internal/feedback"
-	"github.com/jourloy/somivyn/internal/fit"
-	"github.com/jourloy/somivyn/internal/internal_api"
-	"github.com/jourloy/somivyn/internal/middlewares"
-	"github.com/jourloy/somivyn/internal/news"
-	"github.com/jourloy/somivyn/internal/order"
-	"github.com/jourloy/somivyn/internal/plan"
-	"github.com/jourloy/somivyn/internal/product"
-	"github.com/jourloy/somivyn/internal/promo"
-	"github.com/jourloy/somivyn/internal/recipe"
-	"github.com/jourloy/somivyn/internal/recommendation"
-	"github.com/jourloy/somivyn/internal/subscription"
-	"github.com/jourloy/somivyn/internal/supplement"
-	"github.com/jourloy/somivyn/internal/telegram"
-	"github.com/jourloy/somivyn/internal/template"
-	"github.com/jourloy/somivyn/internal/ticket"
-	"github.com/jourloy/somivyn/internal/translation"
-	"github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/nutri02/internal/achievement"
+	"github.com/jourloy/nutri02/internal/ad"
+	"github.com/jourloy/nutri02/internal/admin"
+	"github.com/jourloy/nutri02/internal/ai"
+	"github.com/jourloy/nutri02/internal/analytics"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/blog"
+	"github.com/jourloy/nutri02/internal/body"
+	"github.com/jourloy/nutri02/internal/cache"
+	"github.com/jourloy/nutri02/internal/consent"
+	"github.com/jourloy/nutri02/internal/database"
+	"github.com/jourloy/nutri02/internal/feature"
+	"github.com/jourloy/nutri02/internal/feedback"
+	"github.com/jourloy/nutri02/internal/fit"
+	"github.com/jourloy/nutri02/internal/internal_api"
+	"github.com/jourloy/nutri02/internal/middlewares"
+	"github.com/jourloy/nutri02/internal/news"
+	"github.com/jourloy/nutri02/internal/order"
+	"github.com/jourloy/nutri02/internal/plan"
+	"github.com/jourloy/nutri02/internal/product"
+	"github.com/jourloy/nutri02/internal/promo"
+	"github.com/jourloy/nutri02/internal/recipe"
+	"github.com/jourloy/nutri02/internal/recommendation"
+	"github.com/jourloy/nutri02/internal/subscription"
+	"github.com/jourloy/nutri02/internal/supplement"
+	"github.com/jourloy/nutri02/internal/telegram"
+	"github.com/jourloy/nutri02/internal/template"
+	"github.com/jourloy/nutri02/internal/ticket"
+	"github.com/jourloy/nutri02/internal/translation"
+	"github.com/jourloy/nutri02/internal/user"
 )
 
 var (
@@ -63,12 +63,20 @@ func Start() error {
 	}
 
 	// Middlewares
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://somivyn.com", "https://nutri.jourloy.com", "http://127.0.0.1", "http://192.168.31.138"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowedHeaders:   []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}))
+	r.Use(redirectLegacyHosts)
+	r.Use(cors.Handler(newCORSOptions([]string{
+		"https://nutri02.com",
+		"https://www.nutri02.com",
+		"https://somivyn.com",
+		"https://www.somivyn.com",
+		"https://somivyn.jourloy.com",
+		"https://nutri.jourloy.com",
+		"https://nutri02.jourloy.com",
+		"https://api.somivyn.com",
+		"https://api.somivyn.jourloy.com",
+		"https://api-somivyn.jourloy.com",
+		"http://192.168.31.138",
+	})))
 	r.Use(middlewares.Logger)
 	r.Use(middlewares.Auth)
 	r.Use(middlewares.Subscription)

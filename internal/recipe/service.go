@@ -12,11 +12,11 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 
-	"github.com/jourloy/somivyn/internal/ai"
-	"github.com/jourloy/somivyn/internal/fit"
-	"github.com/jourloy/somivyn/internal/lib"
-	"github.com/jourloy/somivyn/internal/product"
-	"github.com/jourloy/somivyn/internal/storage"
+	"github.com/jourloy/nutri02/internal/ai"
+	"github.com/jourloy/nutri02/internal/fit"
+	"github.com/jourloy/nutri02/internal/lib"
+	"github.com/jourloy/nutri02/internal/product"
+	"github.com/jourloy/nutri02/internal/storage"
 )
 
 type Service interface {
@@ -26,7 +26,7 @@ type Service interface {
 	DeleteBook(ctx context.Context, id int64, userId string) error
 	GetBookById(ctx context.Context, id int64) (*Book, error)
 	GetUserBooks(ctx context.Context, userId string) ([]Book, error)
-	GetSomivynBook(ctx context.Context) (*Book, error)
+	GetNutri02Book(ctx context.Context) (*Book, error)
 	ShareBook(ctx context.Context, id int64, userId string) (*ShareResponse, error)
 	UnshareBook(ctx context.Context, id int64, userId string) error
 	GetSharedBook(ctx context.Context, token string) (*Book, error)
@@ -59,15 +59,15 @@ type Service interface {
 	CopyRecipe(ctx context.Context, id int64, targetBookId int64, userId string) (*Recipe, error)
 	AddToDiary(ctx context.Context, req AddToDiaryRequest, userId string, timezone string) ([]product.Product, error)
 
-	// Somivyn Recipes (Public)
-	GetSomivynRecipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error)
-	GetSomivynRecipeBySlug(ctx context.Context, slug string) (*Recipe, error)
-	GetSomivynRecipeById(ctx context.Context, id int64) (*Recipe, error)
+	// Nutri02 Recipes (Public)
+	GetNutri02Recipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error)
+	GetNutri02RecipeBySlug(ctx context.Context, slug string) (*Recipe, error)
+	GetNutri02RecipeById(ctx context.Context, id int64) (*Recipe, error)
 
 	// Admin
-	CreateSomivynRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
-	UpdateSomivynRecipe(ctx context.Context, r RecipeUpdate) (*Recipe, error)
-	DeleteSomivynRecipe(ctx context.Context, id int64) error
+	CreateNutri02Recipe(ctx context.Context, r RecipeCreate) (*Recipe, error)
+	UpdateNutri02Recipe(ctx context.Context, r RecipeUpdate) (*Recipe, error)
+	DeleteNutri02Recipe(ctx context.Context, id int64) error
 	CreateSystemCategory(ctx context.Context, c CategoryCreate) (*Category, error)
 
 	// Image Upload
@@ -153,8 +153,8 @@ func (s *service) GetUserBooks(ctx context.Context, userId string) ([]Book, erro
 	return s.repo.GetUserBooks(ctx, userId)
 }
 
-func (s *service) GetSomivynBook(ctx context.Context) (*Book, error) {
-	return s.repo.GetSomivynBook(ctx)
+func (s *service) GetNutri02Book(ctx context.Context) (*Book, error) {
+	return s.repo.GetNutri02Book(ctx)
 }
 
 func (s *service) ShareBook(ctx context.Context, id int64, userId string) (*ShareResponse, error) {
@@ -677,11 +677,11 @@ func (s *service) AddToDiary(ctx context.Context, req AddToDiaryRequest, userId 
 	return products, nil
 }
 
-// ===== Somivyn Recipes (Public) =====
+// ===== Nutri02 Recipes (Public) =====
 
-func (s *service) GetSomivynRecipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error) {
-	// Get Somivyn book
-	book, err := s.repo.GetSomivynBook(ctx)
+func (s *service) GetNutri02Recipes(ctx context.Context, params RecipeListParams) (*RecipeListResponse, error) {
+	// Get Nutri02 book
+	book, err := s.repo.GetNutri02Book(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return &RecipeListResponse{
@@ -712,14 +712,14 @@ func (s *service) GetSomivynRecipes(ctx context.Context, params RecipeListParams
 	return response, nil
 }
 
-func (s *service) GetSomivynRecipeBySlug(ctx context.Context, slug string) (*Recipe, error) {
+func (s *service) GetNutri02RecipeBySlug(ctx context.Context, slug string) (*Recipe, error) {
 	recipe, err := s.repo.GetRecipeBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify it's a Somivyn recipe
-	book, err := s.repo.GetSomivynBook(ctx)
+	// Verify it's a Nutri02 recipe
+	book, err := s.repo.GetNutri02Book(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -734,13 +734,13 @@ func (s *service) GetSomivynRecipeBySlug(ctx context.Context, slug string) (*Rec
 	return s.loadRecipeWithRelations(ctx, recipe)
 }
 
-func (s *service) GetSomivynRecipeById(ctx context.Context, id int64) (*Recipe, error) {
+func (s *service) GetNutri02RecipeById(ctx context.Context, id int64) (*Recipe, error) {
 	recipe, err := s.repo.GetRecipeById(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	book, err := s.repo.GetSomivynBook(ctx)
+	book, err := s.repo.GetNutri02Book(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -754,15 +754,15 @@ func (s *service) GetSomivynRecipeById(ctx context.Context, id int64) (*Recipe, 
 
 // ===== Admin =====
 
-func (s *service) CreateSomivynRecipe(ctx context.Context, r RecipeCreate) (*Recipe, error) {
-	// Get Somivyn book
-	book, err := s.repo.GetSomivynBook(ctx)
+func (s *service) CreateNutri02Recipe(ctx context.Context, r RecipeCreate) (*Recipe, error) {
+	// Get Nutri02 book
+	book, err := s.repo.GetNutri02Book(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	r.BookId = book.Id
-	r.UserId = nil // Somivyn recipes have no user
+	r.UserId = nil // Nutri02 recipes have no user
 
 	recipe, err := s.repo.CreateRecipe(ctx, r)
 	if err != nil {
@@ -797,20 +797,20 @@ func (s *service) CreateSomivynRecipe(ctx context.Context, r RecipeCreate) (*Rec
 	return s.loadRecipeWithRelations(ctx, recipe)
 }
 
-func (s *service) UpdateSomivynRecipe(ctx context.Context, r RecipeUpdate) (*Recipe, error) {
-	// Verify it's a Somivyn recipe
+func (s *service) UpdateNutri02Recipe(ctx context.Context, r RecipeUpdate) (*Recipe, error) {
+	// Verify it's a Nutri02 recipe
 	existing, err := s.repo.GetRecipeById(ctx, r.Id)
 	if err != nil {
 		return nil, err
 	}
 
-	book, err := s.repo.GetSomivynBook(ctx)
+	book, err := s.repo.GetNutri02Book(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if existing.BookId != book.Id {
-		return nil, fmt.Errorf("not a Somivyn recipe")
+		return nil, fmt.Errorf("not a Nutri02 recipe")
 	}
 
 	// Resolve system category by name if provided.
@@ -823,7 +823,7 @@ func (s *service) UpdateSomivynRecipe(ctx context.Context, r RecipeUpdate) (*Rec
 		}
 	}
 
-	recipe, err := s.repo.UpdateSomivynRecipe(ctx, r)
+	recipe, err := s.repo.UpdateNutri02Recipe(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -843,30 +843,30 @@ func (s *service) UpdateSomivynRecipe(ctx context.Context, r RecipeUpdate) (*Rec
 	if recipe.ShareToken == nil {
 		newToken := uuid.New().String()
 		if err := s.repo.SetRecipeShareToken(ctx, recipe.Id, newToken); err != nil {
-			s.logger.Warn("failed to set share token for Somivyn recipe", "recipeId", recipe.Id, "error", err)
+			s.logger.Warn("failed to set share token for Nutri02 recipe", "recipeId", recipe.Id, "error", err)
 		}
 	}
 
 	return s.loadRecipeWithRelations(ctx, recipe)
 }
 
-func (s *service) DeleteSomivynRecipe(ctx context.Context, id int64) error {
-	// Verify it's a Somivyn recipe
+func (s *service) DeleteNutri02Recipe(ctx context.Context, id int64) error {
+	// Verify it's a Nutri02 recipe
 	recipe, err := s.repo.GetRecipeById(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	book, err := s.repo.GetSomivynBook(ctx)
+	book, err := s.repo.GetNutri02Book(ctx)
 	if err != nil {
 		return err
 	}
 
 	if recipe.BookId != book.Id {
-		return fmt.Errorf("not a Somivyn recipe")
+		return fmt.Errorf("not a Nutri02 recipe")
 	}
 
-	return s.repo.DeleteSomivynRecipe(ctx, id)
+	return s.repo.DeleteNutri02Recipe(ctx, id)
 }
 
 func (s *service) CreateSystemCategory(ctx context.Context, c CategoryCreate) (*Category, error) {
@@ -923,8 +923,8 @@ func (s *service) CalculateNutrition(ctx context.Context, recipeId int64, userId
 
 	// Check access
 	isOwner := recipe.UserId != nil && *recipe.UserId == userId
-	isSomivynRecipe := recipe.UserId == nil // Somivyn recipes have no userId
-	if !isOwner && !isSomivynRecipe {
+	isNutri02Recipe := recipe.UserId == nil // Nutri02 recipes have no userId
+	if !isOwner && !isNutri02Recipe {
 		return nil, fmt.Errorf("access denied")
 	}
 

@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/jourloy/somivyn/internal/lib"
+	"github.com/jourloy/nutri02/internal/lib"
 )
 
 var (

@@ -1,10 +1,10 @@
 version: "3.8"
 
-name: somivyn-backend
+name: nutri02-backend
 
 services:
   server:
-    container_name: somivyn-backend
+    container_name: nutri02-backend
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,7 +14,7 @@ services:
       - "3002:3002"
     restart: unless-stopped
     networks:
-      - somivyn-network
+      - nutri02-network
     depends_on:
       - postgres
       - redis
@@ -26,7 +26,7 @@ services:
       start_period: 40s
 
   postgres:
-    container_name: somivyn-postgres
+    container_name: nutri02-postgres
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-somivyn}
@@ -38,7 +38,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
-      - somivyn-network
+      - nutri02-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -46,7 +46,7 @@ services:
       retries: 5
 
   redis:
-    container_name: somivyn-redis
+    container_name: nutri02-redis
     image: redis:7-alpine
     command: redis-server --requirepass ${REDIS_PASSWORD:-redis}
     ports:
@@ -55,7 +55,7 @@ services:
       - redis-data:/data
     restart: unless-stopped
     networks:
-      - somivyn-network
+      - nutri02-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -63,7 +63,7 @@ services:
       retries: 5
 
 networks:
-  somivyn-network:
+  nutri02-network:
     driver: bridge
 
 volumes:

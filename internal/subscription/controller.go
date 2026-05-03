@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
+	"github.com/jourloy/nutri02/internal/auth"
 )
 
 var (
@@ -29,19 +29,19 @@ func NewController() *Controller {
 }
 
 func (c *Controller) RegisterRoutes(router chi.Router) {
-    router.Route("/subscription", func(r chi.Router) {
-        r.Post("/", c.Create)
-        r.Put("/", c.Update)
-        r.Delete("/{id}", c.Delete)
-        r.Get("/", c.GetByUser)
-    })
+	router.Route("/subscription", func(r chi.Router) {
+		r.Post("/", c.Create)
+		r.Put("/", c.Update)
+		r.Delete("/{id}", c.Delete)
+		r.Get("/", c.GetByUser)
+	})
 
-    logger.Info("╔═════ Subscription")
-    logger.Info("║   POST /")
-    logger.Info("║    PUT /")
-    logger.Info("║ DELETE /{id}")
-    logger.Info("║    GET /")
-    logger.Info("╚═════")
+	logger.Info("╔═════ Subscription")
+	logger.Info("║   POST /")
+	logger.Info("║    PUT /")
+	logger.Info("║ DELETE /{id}")
+	logger.Info("║    GET /")
+	logger.Info("╚═════")
 }
 
 func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
@@ -118,27 +118,27 @@ func (c *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (c *Controller) GetByUser(w http.ResponseWriter, r *http.Request) {
-    u, ok := auth.UserFromContext(r.Context())
-    if !ok {
-        http.Error(w, "unauthorized", http.StatusUnauthorized)
-        return
-    }
-    userID := u.Id
-    if u.IsAdmin {
-        if q := r.URL.Query().Get("userId"); q != "" {
-            userID = q
-        }
-    }
-    resp, err := c.service.GetByUser(context.Background(), userID)
-    if err != nil {
-        logger.Error("Error get subscription by user", "error", err)
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    w.WriteHeader(http.StatusOK)
-    _ = json.NewEncoder(w).Encode(resp)
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID := u.Id
+	if u.IsAdmin {
+		if q := r.URL.Query().Get("userId"); q != "" {
+			userID = q
+		}
+	}
+	resp, err := c.service.GetByUser(context.Background(), userID)
+	if err != nil {
+		logger.Error("Error get subscription by user", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }

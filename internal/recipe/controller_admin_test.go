@@ -10,38 +10,38 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jourloy/somivyn/internal/auth"
-	"github.com/jourloy/somivyn/internal/user"
+	"github.com/jourloy/nutri02/internal/auth"
+	"github.com/jourloy/nutri02/internal/user"
 )
 
 type fakeRecipeService struct {
 	Service
 
-	getSomivynRecipeByIdFn func(ctx context.Context, id int64) (*Recipe, error)
-	updateSomivynRecipeFn  func(ctx context.Context, r RecipeUpdate) (*Recipe, error)
-	deleteSomivynRecipeFn  func(ctx context.Context, id int64) error
-	createSystemTagFn    func(ctx context.Context, t TagCreate) (*Tag, error)
-	updateSystemTagFn    func(ctx context.Context, t TagUpdate) (*Tag, error)
-	deleteSystemTagFn    func(ctx context.Context, id int64) error
+	getNutri02RecipeByIdFn func(ctx context.Context, id int64) (*Recipe, error)
+	updateNutri02RecipeFn  func(ctx context.Context, r RecipeUpdate) (*Recipe, error)
+	deleteNutri02RecipeFn  func(ctx context.Context, id int64) error
+	createSystemTagFn      func(ctx context.Context, t TagCreate) (*Tag, error)
+	updateSystemTagFn      func(ctx context.Context, t TagUpdate) (*Tag, error)
+	deleteSystemTagFn      func(ctx context.Context, id int64) error
 }
 
-func (f fakeRecipeService) GetSomivynRecipeById(ctx context.Context, id int64) (*Recipe, error) {
-	if f.getSomivynRecipeByIdFn != nil {
-		return f.getSomivynRecipeByIdFn(ctx, id)
+func (f fakeRecipeService) GetNutri02RecipeById(ctx context.Context, id int64) (*Recipe, error) {
+	if f.getNutri02RecipeByIdFn != nil {
+		return f.getNutri02RecipeByIdFn(ctx, id)
 	}
 	return &Recipe{Id: id, TitleRu: "Recipe", Servings: 1, BookId: 1}, nil
 }
 
-func (f fakeRecipeService) UpdateSomivynRecipe(ctx context.Context, r RecipeUpdate) (*Recipe, error) {
-	if f.updateSomivynRecipeFn != nil {
-		return f.updateSomivynRecipeFn(ctx, r)
+func (f fakeRecipeService) UpdateNutri02Recipe(ctx context.Context, r RecipeUpdate) (*Recipe, error) {
+	if f.updateNutri02RecipeFn != nil {
+		return f.updateNutri02RecipeFn(ctx, r)
 	}
 	return &Recipe{Id: r.Id, TitleRu: r.TitleRu, Servings: r.Servings, BookId: 1}, nil
 }
 
-func (f fakeRecipeService) DeleteSomivynRecipe(ctx context.Context, id int64) error {
-	if f.deleteSomivynRecipeFn != nil {
-		return f.deleteSomivynRecipeFn(ctx, id)
+func (f fakeRecipeService) DeleteNutri02Recipe(ctx context.Context, id int64) error {
+	if f.deleteNutri02RecipeFn != nil {
+		return f.deleteNutri02RecipeFn(ctx, id)
 	}
 	return nil
 }
@@ -74,7 +74,7 @@ func withUser(req *http.Request, isAdmin bool) *http.Request {
 	}))
 }
 
-func TestAdminGetSomivynRecipeById_Unauthorized(t *testing.T) {
+func TestAdminGetNutri02RecipeById_Unauthorized(t *testing.T) {
 	r := chi.NewRouter()
 	c := &Controller{service: fakeRecipeService{}}
 	c.RegisterRoutes(r)
@@ -88,7 +88,7 @@ func TestAdminGetSomivynRecipeById_Unauthorized(t *testing.T) {
 	}
 }
 
-func TestAdminGetSomivynRecipeById_ForbiddenForNonAdmin(t *testing.T) {
+func TestAdminGetNutri02RecipeById_ForbiddenForNonAdmin(t *testing.T) {
 	r := chi.NewRouter()
 	c := &Controller{service: fakeRecipeService{}}
 	c.RegisterRoutes(r)
@@ -103,10 +103,10 @@ func TestAdminGetSomivynRecipeById_ForbiddenForNonAdmin(t *testing.T) {
 	}
 }
 
-func TestAdminGetSomivynRecipeById_Success(t *testing.T) {
+func TestAdminGetNutri02RecipeById_Success(t *testing.T) {
 	r := chi.NewRouter()
 	c := &Controller{service: fakeRecipeService{
-		getSomivynRecipeByIdFn: func(ctx context.Context, id int64) (*Recipe, error) {
+		getNutri02RecipeByIdFn: func(ctx context.Context, id int64) (*Recipe, error) {
 			return &Recipe{Id: id, TitleRu: "Омлет", Servings: 2, BookId: 10}, nil
 		},
 	}}
@@ -130,10 +130,10 @@ func TestAdminGetSomivynRecipeById_Success(t *testing.T) {
 	}
 }
 
-func TestAdminUpdateSomivynRecipe_SuccessUpdatesFields(t *testing.T) {
+func TestAdminUpdateNutri02Recipe_SuccessUpdatesFields(t *testing.T) {
 	r := chi.NewRouter()
 	c := &Controller{service: fakeRecipeService{
-		updateSomivynRecipeFn: func(ctx context.Context, ru RecipeUpdate) (*Recipe, error) {
+		updateNutri02RecipeFn: func(ctx context.Context, ru RecipeUpdate) (*Recipe, error) {
 			return &Recipe{
 				Id:       ru.Id,
 				TitleRu:  ru.TitleRu,
@@ -163,11 +163,11 @@ func TestAdminUpdateSomivynRecipe_SuccessUpdatesFields(t *testing.T) {
 	}
 }
 
-func TestAdminDeleteSomivynRecipe_SoftDeletePath(t *testing.T) {
+func TestAdminDeleteNutri02Recipe_SoftDeletePath(t *testing.T) {
 	r := chi.NewRouter()
 	called := false
 	c := &Controller{service: fakeRecipeService{
-		deleteSomivynRecipeFn: func(ctx context.Context, id int64) error {
+		deleteNutri02RecipeFn: func(ctx context.Context, id int64) error {
 			called = true
 			if id != 9 {
 				t.Fatalf("expected id=9, got %d", id)
